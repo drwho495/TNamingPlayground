@@ -30,7 +30,7 @@ class TExtrusion:
 
             print(sketchElementMap)
             
-            featureShape, elementMap = Utils.makeElementExtrusion(sketchFace, sketchElementMap, 10)
+            featureShape, elementMap = Utils.makeMappedExtrusion(sketchFace, sketchElementMap, 10)
             obj.Shape = featureShape
             print(f"mapped elmap: {elementMap}")
 
