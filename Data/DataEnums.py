@@ -7,13 +7,22 @@ class OpCode(Enum):
     BOOLEAN_INTERSECTION = 4
     FILLET = 5
     CHAMFER = 6
+    SKETCH = 7
 
 class MapModifier(Enum):
     COPY = 1
     REMAP = 2
     MERGE = 3
     SPLIT = 4
+    SOURCE = 5
+    EXTRUDED = 6
+    SIMILAR = 7
 
 class HistoryModifier(Enum):
     NEW = 1
     ITERATION = 2
+
+class BooleanType(Enum):
+    FUSE = 1
+    CUT = 2
+    INTERSECTION = 3

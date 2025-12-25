@@ -8,9 +8,12 @@ from Data.IndexedName import IndexedName
 from Data.MappedSection import MappedSection
 from Data.DataEnums import OpCode, HistoryModifier, MapModifier
 
-testNameSection1 = MappedSection(mapModifier = MapModifier.COPY, iterationTag = 1234, elementType = "Edge")
+testNameSection1 = MappedSection(mapModifier = MapModifier.COPY, iterationTag = 1234, referenceIDs = "g234", elementType = "Edge")
 testNameSection2 = MappedSection(opCode = OpCode.BOOLEAN_FUSE, mapModifier = MapModifier.COPY, iterationTag = 2345, historyModifier = HistoryModifier.ITERATION, elementType = "Edge")
 testNameSection3 = MappedSection(opCode = OpCode.BOOLEAN_CUT, mapModifier = MapModifier.SPLIT, linkedNames = [testNameSection1, testNameSection2], iterationTag = 3456, historyModifier = HistoryModifier.NEW, elementType = "Face")
-testName = MappedName("g1", [testNameSection1, testNameSection2, testNameSection3])
+testName = MappedName([testNameSection1, testNameSection2, testNameSection3])
 
-print(testName.toDictionary())
+dictionary = testName.toDictionary()
+
+for section in dictionary["Sections"]:
+    print(section)

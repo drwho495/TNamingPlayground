@@ -1,6 +1,15 @@
+import sys
+import os
+
+sys.path.append(os.path.dirname(__file__))
+
+import Geometry.GeometryUtils as GeometryUtils
+from Geometry.TShape import TShape
+from Data.ElementMap import ElementMap
+from Data.DataEnums import *
 import FreeCADGui as Gui
 import FreeCAD as App
-import os
+import json
 
 class TExtrusion:
     def __init__(self, obj):
@@ -14,15 +23,74 @@ class TExtrusion:
         
         if not hasattr(obj, "Support"):
             obj.addProperty("App::PropertyLink", "Support")
+
+        if not hasattr(obj, "TShape"):
+            obj.addProperty("App::PropertyPythonObject", "TShape")
+            obj.TShape = TShape()
+
+        if not hasattr(obj, "TNamingType"):
+            obj.addProperty("App::PropertyString", "TNamingType")
+            obj.TNamingType = "TExtrusion"
+
+        if not hasattr(obj, "BooleanOperationType"):
+            obj.addProperty("App::PropertyEnumeration", "BooleanOperationType")
+            obj.BooleanOperationType = ["Fuse", "Cut", "Intersection", "None"]
     
     def attach(self, obj):
         self.updateProps(obj)
+
+        elementMap = ElementMap.fromDictionary(json.loads(obj.TElementMap))
+        obj.TShape = TShape(obj.Shape, elementMap)
+        obj.TShape.buildCache()
+
+    def onDocumentRestored(self, obj):
+        self.attach(obj)
 
     def execute(self, obj):
         self.updateProps(obj)
 
         if obj.Support != None:
-            pass
+            sketchShape = GeometryUtils.getFaceOfSketch(obj.Support)
+            mappedExtrusion = GeometryUtils.makeMappedExtrusion(sketchShape, App.Vector(0, 0, 10), obj.ID)[0]
+
+            part = obj.getParent()
+            features = []
+            index = 0
+
+            print("update feature")
+
+            for groupObj in part.Group:
+                if hasattr(groupObj, "TNamingType") and hasattr(groupObj, "TShape"):
+                    if groupObj.Name == obj.Name: index = len(features)
+
+                    features.append(groupObj)            
+
+            print(f"features: {features}")
+            print(f"first feature: {features[0].Label}")
+            print(f"index: {index}")
+
+            if index > 0 and obj.BooleanOperationType != "None":
+                lastFeature = features[index - 1]
+                booleanType = BooleanType.FUSE
+
+                if obj.BooleanOperationType == "Cut":
+                    booleanType = BooleanType.CUT
+                elif obj.BooleanOperationType == "Intersection":
+                    booleanType = BooleanType.INTERSECTION
+
+                mappedExtrusion.tag = -obj.ID
+                mappedResult = GeometryUtils.makeMappedBooleanOperation(mappedExtrusion, lastFeature.TShape, booleanType, obj.ID)[0]
+
+                obj.TShape = mappedResult
+                obj.Shape = mappedResult.getShape()
+                obj.TElementMap = json.dumps(mappedResult.elementMap.toDictionary())
+            else:
+                obj.TShape = mappedExtrusion
+                obj.Shape = mappedExtrusion.getShape()
+                obj.TElementMap = json.dumps(mappedExtrusion.elementMap.toDictionary())
+            
+            GeometryUtils.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)
+
             
     def __setstate__(self, state):
         return None

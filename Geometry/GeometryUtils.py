@@ -1,7 +1,367 @@
+import sys
+import os
+
+sys.path.append(os.path.dirname(__file__))
+
+from Data.ElementMap import ElementMap
+from Data.IndexedName import IndexedName
+from Data.MappedName import MappedName
+from Data.MappedSection import MappedSection
+from Data.DataEnums import *
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
+from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakePrism
+from OCC.Core.TopoDS import TopoDS_Shape
+from OCC.Core.gp import gp_Vec
+from OCC.Core.TopAbs import TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX
+from OCC.Core.BRepAlgoAPI import (
+    BRepAlgoAPI_Fuse,
+    BRepAlgoAPI_Cut,
+    BRepAlgoAPI_Common
+)
 from statistics import mode
+from TShape import TShape
+import Geometry.MappingUtils as MappingUtils
+
+class ShapeHistoryList:
+    def __init__(self, historyType: int):
+        self.historyList = {}
+        self.reverseHistoryList = {}
+        self.historyType = historyType
+
+    def extendList(self, indexedName: IndexedName, OCCTList, parentShape: TShape):
+        if OCCTList.Size() == 0: return
+
+        self.historyList[indexedName] = []
+
+        for element in MappingUtils.occtLOStoList(OCCTList):
+            foundName = parentShape.getIndexedNameOfShape(element)
+            foundName.parentIdentifier = parentShape.tag
+
+            if foundName not in self.historyList[indexedName]:
+                self.historyList[indexedName].append(foundName)
+
+    def getHistoryOfElement(self, indexedName: IndexedName):
+        if indexedName in self.reverseHistoryList:
+            return self.reverseHistoryList[indexedName]
+    
+    def getReverseHistoryOfElement(self, indexedName: IndexedName):
+        if indexedName in self.historyList:
+            return self.historyList[indexedName]
+    
+    def updateReverseList(self):
+        self.reverseHistoryList = {}
+
+        for sourceIndexedName, destinationNames in self.historyList.items():
+            for name in destinationNames:
+                if name not in self.reverseHistoryList: self.reverseHistoryList[name] = []
+
+                self.reverseHistoryList[name].append(sourceIndexedName)
+
+def makeMappedExtrusion(supportTShape: TShape, direction: App.Vector, tag: int = 0):
+    vec = gp_Vec(direction.x, direction.y, direction.z)
+    maker = BRepPrimAPI_MakePrism(supportTShape.getOCCTShape(), vec)
+    maker.Build()
+
+    supportTShape.buildShapeMap()
+    supportTShape.tag = tag
+
+    extrusionTShape = TShape(sourceShape = maker.Shape(), elementMap = ElementMap())
+    extrusionTShape.tag = tag
+
+    generatedMap = {}
+    modifiedMap = {}
+
+    extrusionTShape.buildShapeMap(True)
+    extrusionTShape.buildAncestorsMap(False)
+
+    topVertexes = []
+
+    mapSubElement(extrusionTShape, 
+                  supportTShape, 
+                  retagSection = False, 
+                  appendedSection = MappedSection(opCode = OpCode.EXTRUSION,
+                                                  historyModifier = HistoryModifier.NEW,
+                                                  mapModifier = MapModifier.REMAP,
+                                                  iterationTag = tag)
+    )
+
+    for mappedName, shape in extrusionTShape.getIDShapeMap().items():
+        if len(mappedName.mappedSections) == 2:
+            if shape.ShapeType() == TopAbs_EDGE:
+                faceAncestors = extrusionTShape.getAncestorsOfType(shape, "Face")
+
+                for face in faceAncestors:
+                    faceIndexedName = extrusionTShape.getIndexedNameOfShape(face)
+
+                    if not extrusionTShape.elementMap.hasIndexedName(faceIndexedName):
+                        extrusionTShape.elementMap.setElement(faceIndexedName, MappedName(
+                                [
+                                    MappedSection(opCode = OpCode.EXTRUSION,
+                                                  historyModifier = HistoryModifier.NEW,
+                                                  mapModifier = MapModifier.EXTRUDED,
+                                                  iterationTag = supportTShape.tag,
+                                                  referenceIDs = mappedName.masterIDs(),
+                                                  elementType = "Face"
+                                                )
+                                ]
+                            )
+                        )
+            elif shape.ShapeType() == TopAbs_VERTEX:
+                edgeAncestors = extrusionTShape.getAncestorsOfType(shape, "Edge")
+
+                for edge in edgeAncestors:
+                    edgeIndexedName = extrusionTShape.getIndexedNameOfShape(edge)
+
+                    if not extrusionTShape.elementMap.hasIndexedName(edgeIndexedName):
+                        extrusionTShape.elementMap.setElement(edgeIndexedName, MappedName(
+                                [
+                                    MappedSection(opCode = OpCode.EXTRUSION,
+                                                  historyModifier = HistoryModifier.NEW,
+                                                  mapModifier = MapModifier.EXTRUDED,
+                                                  iterationTag = supportTShape.tag,
+                                                  referenceIDs = mappedName.masterIDs(),
+                                                  elementType = "Edge"
+                                                )
+                                ]
+                            )
+                        )
+                    
+                    vertexes = extrusionTShape.getSubElementsOfChild(edge, TopAbs_VERTEX)
+
+                    for vertex in vertexes:
+                        vertexIndexedName = extrusionTShape.getIndexedNameOfShape(vertex)
+
+                        if not extrusionTShape.elementMap.hasIndexedName(vertexIndexedName):
+                            extrusionTShape.elementMap.setElement(vertexIndexedName, MappedName(
+                                    [
+                                        MappedSection(opCode = OpCode.EXTRUSION,
+                                                      historyModifier = HistoryModifier.NEW,
+                                                      mapModifier = MapModifier.EXTRUDED,
+                                                      iterationTag = supportTShape.tag,
+                                                      referenceIDs = mappedName.masterIDs(),
+                                                      elementType = "Vertex"
+                                                    )
+                                    ]
+                                )
+                            )
+                            topVertexes.append(vertexIndexedName)
+
+    topEdges = {}
+
+    for vertexIndexedName in topVertexes:
+        edgeAncestors = extrusionTShape.getAncestorsOfType(extrusionTShape.getElement(vertexIndexedName), "Edge")
+
+        for edge in edgeAncestors:
+            edgeIndexedName = extrusionTShape.getIndexedNameOfShape(edge)
+
+            if not extrusionTShape.elementMap.hasIndexedName(edgeIndexedName):
+                if edgeIndexedName not in topEdges:
+                    topEdges[edgeIndexedName] = []
+                
+                topEdges[edgeIndexedName].extend(extrusionTShape.elementMap.getMappedName(vertexIndexedName).masterIDs())
+    
+    topFaces = {}
+
+    for edgeIndexedName, IDs in topEdges.items():
+        formattedIDs = []
+
+        for id in IDs:
+            if "v" not in id: continue
+
+            formattedIDs.append(f"{id.split('v')[0]};{id.split(';')[-1]}")
+        
+        modeID = mode(formattedIDs)
+
+        extrusionTShape.elementMap.setElement(edgeIndexedName, MappedName(
+                [
+                    MappedSection(opCode = OpCode.EXTRUSION,
+                                  historyModifier = HistoryModifier.NEW,
+                                  mapModifier = MapModifier.COPY,
+                                  iterationTag = supportTShape.tag,
+                                  referenceIDs = [modeID],
+                                  elementType = "Edge"
+                                )
+                ]
+            )
+        )
+
+        faceAncestors = extrusionTShape.getAncestorsOfType(extrusionTShape.getElement(edgeIndexedName), "Face")
+
+        for face in faceAncestors:
+            faceIndexedName = extrusionTShape.getIndexedNameOfShape(face)
+
+            if not extrusionTShape.elementMap.hasIndexedName(faceIndexedName):
+                if faceIndexedName not in topFaces:
+                    topFaces[faceIndexedName] = []
+
+                if modeID not in topFaces[faceIndexedName]: topFaces[faceIndexedName].append(modeID)
+        
+    for topFaceIndexedName, ids in topFaces.items():
+        extrusionTShape.elementMap.setElement(topFaceIndexedName, MappedName(
+                [
+                    MappedSection(opCode = OpCode.EXTRUSION,
+                                  historyModifier = HistoryModifier.NEW,
+                                  mapModifier = MapModifier.COPY,
+                                  iterationTag = supportTShape.tag,
+                                  referenceIDs = ids,
+                                  elementType = "Face"
+                                )
+                ]
+            )
+        )
+
+    return (extrusionTShape, maker, generatedMap, modifiedMap)
+
+def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, booleanType: BooleanType, tag: int = 0):
+    maker = None
+    opCode = None
+
+    if booleanType == BooleanType.FUSE:
+        maker = BRepAlgoAPI_Fuse(operatorShape.getOCCTShape(), baseShape.getOCCTShape())
+        opCode = OpCode.BOOLEAN_FUSE
+    elif booleanType == BooleanType.CUT:
+        maker = BRepAlgoAPI_Cut(operatorShape.getOCCTShape(), baseShape.getOCCTShape())
+        opCode = OpCode.BOOLEAN_CUT
+    elif booleanType == BooleanType.INTERSECTION:
+        maker = BRepAlgoAPI_Common(operatorShape.getOCCTShape(), baseShape.getOCCTShape())
+        opCode = OpCode.BOOLEAN_INTERSECTION
+
+    maker.Build()
+
+    returnShape = TShape(maker.Shape(), ElementMap())
+    returnShape.tag = tag
+    returnShape.buildCache()
+
+    mapSubElement(returnShape, operatorShape, appendedSection = MappedSection(opCode = opCode,
+                                                                              historyModifier = HistoryModifier.ITERATION,
+                                                                              mapModifier = MapModifier.REMAP,
+                                                                              iterationTag = baseShape.tag
+                                                                            )
+    )
+
+    mapSubElement(returnShape, baseShape, appendedSection = MappedSection(opCode = opCode,
+                                                                          historyModifier = HistoryModifier.ITERATION,
+                                                                          mapModifier = MapModifier.REMAP,
+                                                                          iterationTag = baseShape.tag
+                                                                        )
+    )
+
+    generatedShapes = ShapeHistoryList(0)
+    modifiedShapes = ShapeHistoryList(1)
+
+    for shape in [baseShape, operatorShape]:
+        for indexedNameStr, subElement in shape.getShapeMap().items():
+            indexedName = IndexedName.fromString(indexedNameStr)
+            indexedName.parentIdentifier = shape.tag
+
+            generatedShapes.extendList(indexedName,
+                                      maker.Generated(subElement),
+                                      returnShape)
+    
+    for shape in [baseShape, operatorShape]:
+        for indexedNameStr, subElement in shape.getShapeMap().items():
+            indexedName = IndexedName.fromString(indexedNameStr)
+            indexedName.parentIdentifier = shape.tag
+
+            modifiedShapes.extendList(indexedName,
+                                      maker.Modified(subElement),
+                                      returnShape)
+    
+    generatedShapes.updateReverseList()
+    modifiedShapes.updateReverseList()
+
+    for sourceName, newShapes in modifiedShapes.historyList.items():
+        for i, newShapeIndexedName in enumerate(newShapes):
+            newMappedName = None
+            ancestors = []
+
+            if sourceName.parentIdentifier == baseShape.tag:
+                newMappedName = baseShape.elementMap.getMappedName(sourceName)
+            elif sourceName.parentIdentifier == operatorShape.tag:
+                newMappedName = operatorShape.elementMap.getMappedName(sourceName)
+
+            if len(newShapes) > 1 and newShapeIndexedName.toString() in returnShape.ancestorsMap:
+                for ancestorNameStr in returnShape.ancestorsMap[newShapeIndexedName.toString()]:
+                    ancestors.append(ancestorNameStr)
+
+            newMappedName.mappedSections.append(MappedSection(opCode = opCode,
+                                                              historyModifier = HistoryModifier.ITERATION,
+                                                              mapModifier = MapModifier.SIMILAR,
+                                                              iterationTag = returnShape.tag,
+                                                              elementType = newShapeIndexedName.elementType,
+                                                              index = i,
+                                                              ancestors = [])
+            )
+
+            returnShape.elementMap.setElement(newShapeIndexedName, newMappedName)
+    
+    for newShapeName, sourceShapeNames in generatedShapes.reverseHistoryList.items():
+        mappedNames = []
+
+        for name in sourceShapeNames:
+            mappedName = None
+
+            if name.parentIdentifier == baseShape.tag:
+                mappedName = baseShape.elementMap.getMappedName(name)
+            elif name.parentIdentifier == operatorShape.tag:
+                mappedName = operatorShape.elementMap.getMappedName(name)
+            
+            if len(mappedName.mappedSections) > 0: mappedNames.append(mappedName.copy())
+
+        if len(mappedNames) > 0:
+            returnShape.elementMap.setElement(newShapeName, MappedName([MappedSection(opCode = opCode,
+                                              historyModifier = HistoryModifier.NEW,
+                                              mapModifier = MapModifier.MERGE,
+                                              iterationTag = returnShape.tag,
+                                              linkedNames = mappedNames,
+                                              elementType = newShapeName.elementType)]
+                )
+            )
+
+    print(f"generated map: {generatedShapes.historyList}")
+    print(f"modified map: {modifiedShapes.historyList}")
+
+    return (returnShape, maker, generatedShapes, modifiedShapes)
+
+def colorElementsFromSupport(obj, shape: Part.Shape, elementMap: ElementMap):
+    edgeColors = [(1.0, 0.0, 0.0)] * len(shape.Edges)
+    faceColors = [(1.0, 0.0, 0.0)] * len(shape.Faces)
+
+    for i, _ in enumerate(shape.Edges):
+        edgeName = f"Edge{i + 1}"
+
+        if elementMap.hasIndexedName(IndexedName.fromString(edgeName)):
+            edgeColors[i] = (0.0, 1.0, 0.0)
+
+    for i, _ in enumerate(shape.Faces):
+        faceName = f"Face{i + 1}"
+
+        if elementMap.hasIndexedName(IndexedName.fromString(faceName)):
+            faceColors[i] = (0.0, 1.0, 0.0)
+
+    obj.ViewObject.LineColorArray = edgeColors
+    obj.ViewObject.DiffuseColor = faceColors
+
+def mapSubElement(baseShape: TShape, sourceShape: TShape, retagSection = False, appendedSection: MappedSection = None):
+    if sourceShape.getShapeMap() == {}: sourceShape.buildShapeMap()
+    if baseShape.getShapeMap() == {}: baseShape.buildShapeMap()
+
+    for sIndexedNameStr, sShape in sourceShape.getShapeMap().items():
+        for bIndexedNameStr, bShape in baseShape.getShapeMap().items():
+            if sShape.IsSame(bShape):
+                baseIndexedName = IndexedName.fromString(bIndexedNameStr)
+                newName = sourceShape.elementMap.getMappedName(IndexedName.fromString(sIndexedNameStr))
+
+                if len(newName.mappedSections) != 0:
+                    if retagSection: newName.mappedSections[-1].iterationTag = baseShape.tag
+
+                    if appendedSection != None:
+                        appendedSection.elementType = baseIndexedName.elementType
+                        newName.mappedSections.append(appendedSection)
+
+                    baseShape.elementMap.setElement(baseIndexedName, newName)
 
 def getNameOfElement(elementShape, shape):
     if isinstance(elementShape, Part.Vertex):
@@ -18,7 +378,7 @@ def getNameOfElement(elementShape, shape):
                 return f"Face{i + 1}"
 
 def getFaceOfSketch(sketch):
-    elementMap = {} # "Edge1": "g1"
+    elementMap = ElementMap()
     vertexesMap = {}
     facesMap = {}
 
@@ -30,6 +390,8 @@ def getFaceOfSketch(sketch):
         supportFace = None
     
     if supportFace != None:
+        supportFace.Placement = sketch.Placement.inverse()
+
         for geoF in sketch.GeometryFacadeList:
             geom = geoF.Geometry
             geomShape = geom.toShape()
@@ -37,8 +399,15 @@ def getFaceOfSketch(sketch):
             if geom.TypeId != "Part::GeomPoint":
                 for i, edge in enumerate(supportFace.Edges):
                     if edge.Curve.isSame(geomShape.Curve, 1e-6, 1e-6):
-                        print("edge is same")
-                        elementMap[f"Edge{i + 1}"] = f"g{geoF.Id};"
+                        elementMap.setElement(IndexedName.fromString(f"Edge{i + 1}"), MappedName(
+                                [MappedSection(opCode = OpCode.SKETCH,
+                                               historyModifier = HistoryModifier.NEW,
+                                               mapModifier = MapModifier.SOURCE,
+                                               iterationTag = sketch.ID,
+                                               referenceIDs = f"g{geoF.Id};{sketch.ID}",
+                                               elementType = "Edge")]
+                            )
+                        )
 
                         if len(edge.Vertexes) > 1:
                             for vertex in edge.Vertexes:
@@ -49,23 +418,29 @@ def getFaceOfSketch(sketch):
                                         vertexesMap[vertexName] = []
                                     
                                     if vertex.Point.isEqual(geom.StartPoint, 1e-6):
-                                        vertexesMap[vertexName].append(f"g{geoF.Id}v1")
+                                        vertexesMap[vertexName].append(f"g{geoF.Id}v1;{sketch.ID}")
 
                                     if vertex.Point.isEqual(geom.EndPoint, 1e-6):
-                                        vertexesMap[vertexName].append(f"g{geoF.Id}v2")
+                                        vertexesMap[vertexName].append(f"g{geoF.Id}v2;{sketch.ID}")
                         elif len(edge.Vertexes) == 1:
                             vertexName = getNameOfElement(edge.Vertexes[0], supportFace)
                             
                             if vertexName != None:
                                 vertexesMap[vertexName] = []
 
-                            vertexesMap[vertexName].append(f"g{geoF.Id}v1")
+                            vertexesMap[vertexName].append(f"g{geoF.Id}v1;{sketch.ID}")
     
         for vertexName, IDs in vertexesMap.items():
             if len(IDs) != 0:
-                print(IDs)
-                
-                elementMap[vertexName] = f"{','.join(IDs)};"
+                elementMap.setElement(IndexedName.fromString(vertexName), MappedName(
+                        [MappedSection(opCode = OpCode.SKETCH,
+                                    historyModifier = HistoryModifier.NEW,
+                                    mapModifier = MapModifier.SOURCE,
+                                    iterationTag = sketch.ID,
+                                    referenceIDs = IDs,
+                                    elementType = "Vertex")]
+                    )
+                )
         
         for face in supportFace.Faces:
             faceName = getNameOfElement(face, supportFace)
@@ -73,15 +448,25 @@ def getFaceOfSketch(sketch):
             for faceEdge in face.Edges:
                 faceEdgeName = getNameOfElement(faceEdge, supportFace)
 
-                if faceEdgeName in elementMap:
+                if elementMap.hasIndexedName(IndexedName.fromString(faceEdgeName)):
                     if faceName not in facesMap:
                         facesMap[faceName] = []
                     
-                    facesMap[faceName].append(elementMap[faceEdgeName].removesuffix(";"))
+                    facesMap[faceName].extend(elementMap.getMappedName(IndexedName.fromString(faceEdgeName)).masterIDs())
         
         for faceName, ids in facesMap.items():
-            elementMap[faceName] = f"{','.join(ids)};"
-        
-        return (supportFace, elementMap)
+            elementMap.setElement(IndexedName.fromString(faceName), MappedName(
+                    [MappedSection(opCode = OpCode.SKETCH,
+                                historyModifier = HistoryModifier.NEW,
+                                mapModifier = MapModifier.SOURCE,
+                                iterationTag = sketch.ID,
+                                referenceIDs = ids,
+                                elementType = "Face")]
+                )
+            )
+        supportFace.Placement = App.Placement()
+        tSupportFace = TShape(supportFace, elementMap)
+
+        return tSupportFace
     else:
-        return (supportFace, {})
+        return TShape()
