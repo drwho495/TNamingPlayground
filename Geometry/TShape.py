@@ -1,10 +1,12 @@
 import sys
 import os
+import copy
 
 sys.path.append(os.path.dirname(__file__))
 
 from Data.ElementMap import ElementMap
 from Data.IndexedName import IndexedName
+from Data.MappedName import MappedName
 import MappingUtils as MappingUtils
 import FreeCAD as App
 import Part
@@ -30,12 +32,17 @@ class TShape:
         self.ancestorsMap = None
         self.tag = self.freecadShape.Tag
 
-    # def __hash__(self):
-    #     return hash(self.freecadShape)
+    def __hash__(self):
+        return hash(self.freecadShape)
 
-    # def __eq__(self, value):
-    #     if isinstance(value, TShape):
-    #         return hash(value) == hash(self)
+    def __eq__(self, value):
+        if isinstance(value, TShape):
+            return hash(value) == hash(self)
+    
+    def copy(self):
+        shapeCopy = TShape(self.freecadShape.copy(), self.elementMap.copy())
+
+        return shapeCopy
 
     def clearCache(self):
         self.cachedOCCTShape = None
@@ -97,9 +104,9 @@ class TShape:
         
         return returnList
     
-    def getSubElementsOfChild(self, childShape, type):
+    def getSubElementsOfChild(self, childShape, type: str):
         subElements = []
-        exp = TopExp_Explorer(childShape, type)
+        exp = TopExp_Explorer(childShape, MappingUtils.getElementTypeIndex(type))
 
         while exp.More():
             subElements.append(exp.Current())
@@ -118,7 +125,7 @@ class TShape:
     
     def getIDShapeMap(self):
         if self.shapeMap == None:
-            self.buildShapeMap()
+            self.buildShapeMap(False)
 
         returnMap = {}
         
@@ -131,7 +138,7 @@ class TShape:
         return returnMap
     
     def getIndexedNameOfShape(self, childOCCTShape):
-        if self.shapeMap == None: self.buildShapeMap()
+        if self.shapeMap == None: self.buildShapeMap(False)
 
         for indexedNameStr, shape in self.shapeMap.items():
             if shape.IsSame(childOCCTShape):
@@ -161,7 +168,13 @@ class TShape:
             for i in range(1, internalShapeMap.Size() + 1):
                 self.shapeMap[f"{MappingUtils.getElementTypeName(elementType)}{i}"] = internalShapeMap.FindKey(i)
 
-    def getElement(self, indexedName: IndexedName):
+    def getIndexedName(self, searchName: MappedName):
+        for loopName, shape in self.getIDShapeMap().items():
+            if loopName == searchName:
+                return self.getIndexedNameOfShape(shape)
+
+    def getElement(self, name):
         if self.shapeMap == None: self.buildShapeMap(False)
 
-        return self.shapeMap[indexedName.toString()]
+        if isinstance(name, IndexedName):
+            return self.shapeMap[name.toString()]

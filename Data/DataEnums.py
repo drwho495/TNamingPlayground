@@ -8,6 +8,7 @@ class OpCode(Enum):
     FILLET = 5
     CHAMFER = 6
     SKETCH = 7
+    REFINE = 8
 
 class MapModifier(Enum):
     COPY = 1
@@ -16,7 +17,6 @@ class MapModifier(Enum):
     SPLIT = 4
     SOURCE = 5
     EXTRUDED = 6
-    SIMILAR = 7
 
 class HistoryModifier(Enum):
     NEW = 1

@@ -27,6 +27,10 @@ class TExtrusion:
         if not hasattr(obj, "TShape"):
             obj.addProperty("App::PropertyPythonObject", "TShape")
             obj.TShape = TShape()
+        
+        if not hasattr(obj, "LastShapeIteration"):
+            obj.addProperty("App::PropertyPythonObject", "LastShapeIteration")
+            obj.LastShapeIteration = TShape()
 
         if not hasattr(obj, "TNamingType"):
             obj.addProperty("App::PropertyString", "TNamingType")
@@ -53,21 +57,17 @@ class TExtrusion:
             sketchShape = GeometryUtils.getFaceOfSketch(obj.Support)
             mappedExtrusion = GeometryUtils.makeMappedExtrusion(sketchShape, App.Vector(0, 0, 10), obj.ID)[0]
 
+            obj.LastShapeIteration = obj.TShape.copy()
+
             part = obj.getParent()
             features = []
             index = 0
-
-            print("update feature")
 
             for groupObj in part.Group:
                 if hasattr(groupObj, "TNamingType") and hasattr(groupObj, "TShape"):
                     if groupObj.Name == obj.Name: index = len(features)
 
                     features.append(groupObj)            
-
-            print(f"features: {features}")
-            print(f"first feature: {features[0].Label}")
-            print(f"index: {index}")
 
             if index > 0 and obj.BooleanOperationType != "None":
                 lastFeature = features[index - 1]

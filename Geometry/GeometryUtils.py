@@ -73,22 +73,23 @@ def makeMappedExtrusion(supportTShape: TShape, direction: App.Vector, tag: int =
     generatedMap = {}
     modifiedMap = {}
 
-    extrusionTShape.buildShapeMap(True)
-    extrusionTShape.buildAncestorsMap(False)
+    extrusionTShape.buildCache()
 
     topVertexes = []
 
     mapSubElement(extrusionTShape, 
                   supportTShape, 
-                  retagSection = False, 
+                  rebaseFromExistingSourceName = False,
                   appendedSection = MappedSection(opCode = OpCode.EXTRUSION,
                                                   historyModifier = HistoryModifier.NEW,
                                                   mapModifier = MapModifier.REMAP,
                                                   iterationTag = tag)
     )
 
+    extrusionTShape.buildShapeMap(False)
+
     for mappedName, shape in extrusionTShape.getIDShapeMap().items():
-        if len(mappedName.mappedSections) == 2:
+        if len(mappedName.mappedSections) == 1:
             if shape.ShapeType() == TopAbs_EDGE:
                 faceAncestors = extrusionTShape.getAncestorsOfType(shape, "Face")
 
@@ -128,7 +129,7 @@ def makeMappedExtrusion(supportTShape: TShape, direction: App.Vector, tag: int =
                             )
                         )
                     
-                    vertexes = extrusionTShape.getSubElementsOfChild(edge, TopAbs_VERTEX)
+                    vertexes = extrusionTShape.getSubElementsOfChild(edge, "Vertex")
 
                     for vertex in vertexes:
                         vertexIndexedName = extrusionTShape.getIndexedNameOfShape(vertex)
@@ -237,14 +238,14 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
     mapSubElement(returnShape, operatorShape, appendedSection = MappedSection(opCode = opCode,
                                                                               historyModifier = HistoryModifier.ITERATION,
                                                                               mapModifier = MapModifier.REMAP,
-                                                                              iterationTag = baseShape.tag
+                                                                              iterationTag = returnShape.tag
                                                                             )
     )
 
     mapSubElement(returnShape, baseShape, appendedSection = MappedSection(opCode = opCode,
                                                                           historyModifier = HistoryModifier.ITERATION,
                                                                           mapModifier = MapModifier.REMAP,
-                                                                          iterationTag = baseShape.tag
+                                                                          iterationTag = returnShape.tag
                                                                         )
     )
 
@@ -274,13 +275,15 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
 
     for sourceName, newShapes in modifiedShapes.historyList.items():
         for i, newShapeIndexedName in enumerate(newShapes):
+            if returnShape.elementMap.hasIndexedName(newShapeIndexedName): continue
+
             newMappedName = None
             ancestors = []
 
             if sourceName.parentIdentifier == baseShape.tag:
-                newMappedName = baseShape.elementMap.getMappedName(sourceName)
+                newMappedName = baseShape.elementMap.getMappedName(sourceName).copy()
             elif sourceName.parentIdentifier == operatorShape.tag:
-                newMappedName = operatorShape.elementMap.getMappedName(sourceName)
+                newMappedName = operatorShape.elementMap.getMappedName(sourceName).copy()
 
             if len(newShapes) > 1 and newShapeIndexedName.toString() in returnShape.ancestorsMap:
                 for ancestorNameStr in returnShape.ancestorsMap[newShapeIndexedName.toString()]:
@@ -288,17 +291,23 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
 
             newMappedName.mappedSections.append(MappedSection(opCode = opCode,
                                                               historyModifier = HistoryModifier.ITERATION,
-                                                              mapModifier = MapModifier.SIMILAR,
+                                                              mapModifier = MapModifier.REMAP,
                                                               iterationTag = returnShape.tag,
                                                               elementType = newShapeIndexedName.elementType,
                                                               index = i,
+                                                              forkedElement = len(newShapes) != 1,
                                                               ancestors = [])
             )
 
             returnShape.elementMap.setElement(newShapeIndexedName, newMappedName)
+            
+            MappingUtils.addAncestorsToSection(returnShape.elementMap.getMappedName(newShapeIndexedName).mappedSections[-1],
+                                               returnShape.getElement(newShapeIndexedName),
+                                               returnShape)
     
-    for newShapeName, sourceShapeNames in generatedShapes.reverseHistoryList.items():
+    for newShapeIndexedName, sourceShapeNames in generatedShapes.reverseHistoryList.items():
         mappedNames = []
+        if returnShape.elementMap.hasIndexedName(newShapeIndexedName): continue
 
         for name in sourceShapeNames:
             mappedName = None
@@ -311,14 +320,18 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
             if len(mappedName.mappedSections) > 0: mappedNames.append(mappedName.copy())
 
         if len(mappedNames) > 0:
-            returnShape.elementMap.setElement(newShapeName, MappedName([MappedSection(opCode = opCode,
+            returnShape.elementMap.setElement(newShapeIndexedName, MappedName([MappedSection(opCode = opCode,
                                               historyModifier = HistoryModifier.NEW,
                                               mapModifier = MapModifier.MERGE,
                                               iterationTag = returnShape.tag,
                                               linkedNames = mappedNames,
-                                              elementType = newShapeName.elementType)]
+                                              elementType = newShapeIndexedName.elementType)]
                 )
             )
+
+            MappingUtils.addAncestorsToSection(returnShape.elementMap.getMappedName(newShapeIndexedName).mappedSections[-1],
+                                               returnShape.getElement(newShapeIndexedName),
+                                               returnShape)
 
     print(f"generated map: {generatedShapes.historyList}")
     print(f"modified map: {modifiedShapes.historyList}")
@@ -326,8 +339,9 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
     return (returnShape, maker, generatedShapes, modifiedShapes)
 
 def colorElementsFromSupport(obj, shape: Part.Shape, elementMap: ElementMap):
-    edgeColors = [(1.0, 0.0, 0.0)] * len(shape.Edges)
-    faceColors = [(1.0, 0.0, 0.0)] * len(shape.Faces)
+    edgeColors =   [(1.0, 0.0, 0.0)] * len(shape.Edges)
+    faceColors   = [(1.0, 0.0, 0.0)] * len(shape.Faces)
+    vertexColors = [(1.0, 0.0, 0.0)] * len(shape.Vertexes)
 
     for i, _ in enumerate(shape.Edges):
         edgeName = f"Edge{i + 1}"
@@ -340,11 +354,18 @@ def colorElementsFromSupport(obj, shape: Part.Shape, elementMap: ElementMap):
 
         if elementMap.hasIndexedName(IndexedName.fromString(faceName)):
             faceColors[i] = (0.0, 1.0, 0.0)
+    
+    for i, _ in enumerate(shape.Vertexes):
+        vertexName = f"Vertex{i + 1}"
+
+        if elementMap.hasIndexedName(IndexedName.fromString(vertexName)):
+            vertexColors[i] = (0.0, 1.0, 0.0)
 
     obj.ViewObject.LineColorArray = edgeColors
     obj.ViewObject.DiffuseColor = faceColors
+    obj.ViewObject.PointColorArray = vertexColors
 
-def mapSubElement(baseShape: TShape, sourceShape: TShape, retagSection = False, appendedSection: MappedSection = None):
+def mapSubElement(baseShape: TShape, sourceShape: TShape, rebaseFromExistingSourceName = True, appendedSection: MappedSection = None):
     if sourceShape.getShapeMap() == {}: sourceShape.buildShapeMap()
     if baseShape.getShapeMap() == {}: baseShape.buildShapeMap()
 
@@ -352,14 +373,23 @@ def mapSubElement(baseShape: TShape, sourceShape: TShape, retagSection = False, 
         for bIndexedNameStr, bShape in baseShape.getShapeMap().items():
             if sShape.IsSame(bShape):
                 baseIndexedName = IndexedName.fromString(bIndexedNameStr)
-                newName = sourceShape.elementMap.getMappedName(IndexedName.fromString(sIndexedNameStr))
 
-                if len(newName.mappedSections) != 0:
-                    if retagSection: newName.mappedSections[-1].iterationTag = baseShape.tag
+                sourceName = sourceShape.elementMap.getMappedName(IndexedName.fromString(sIndexedNameStr))
 
+                if len(sourceName.mappedSections) != 0:
+                    newName = MappedName().copy()
+
+                    if rebaseFromExistingSourceName:
+                        newName = sourceName.copy()
+                    
                     if appendedSection != None:
-                        appendedSection.elementType = baseIndexedName.elementType
-                        newName.mappedSections.append(appendedSection)
+                        copiedAppendedSection = appendedSection.copy()
+                        copiedAppendedSection.elementType = baseIndexedName.elementType
+
+                        if not rebaseFromExistingSourceName:
+                            copiedAppendedSection.referenceIDs = sourceName.masterIDs()
+
+                        newName.mappedSections.append(copiedAppendedSection)
 
                     baseShape.elementMap.setElement(baseIndexedName, newName)
 

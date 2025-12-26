@@ -1,4 +1,5 @@
 from Data.MappedName import MappedName
+import copy
 
 class ElementMap:
     def __init__(self):
@@ -18,6 +19,9 @@ class ElementMap:
     
     def getMap(self):
         return self.internalMap
+    
+    def copy(self):
+        return copy.deepcopy(self)
     
     def toDictionary(self):
         returnDict = {}

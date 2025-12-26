@@ -4,6 +4,8 @@ import locater
 import FreeCADGui as Gui
 import FreeCAD as App
 from Commands.CreateTExtrusion import CreateTExtrusion
+from Commands.CreateSelector import CreateSelector
+from Commands.DisplayElementHistory import DisplayElementHistory
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(locater.__file__)))) # allow python to see ".."
 __dirname__ = os.path.dirname(locater.__file__)
@@ -29,6 +31,8 @@ class ToponamingBench(Gui.Workbench):
         # List the commands to be added to the workbench
         featureCommands = [
             "CreateTExtrusion",
+            "DisplayElementHistory",
+            "CreateSelector"
         ]
         
         self.appendToolbar("TNaming Features", featureCommands)

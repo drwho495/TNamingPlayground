@@ -31,7 +31,9 @@ class MappedName:
         return hash(json.dumps(self.toDictionary()))
     
     def __eq__(self, value):
-        return hash(value) == hash(self)
+        if isinstance(value, MappedName) or isinstance(value, str):
+            return self.equal(value)
+        return False
     
     def masterIDs(self):
         if len(self.mappedSections) != 0:
@@ -41,4 +43,13 @@ class MappedName:
     
     # this is a base equality check, we will do more complicated searching checks later
     def equal(self, otherMappedName):
-        return otherMappedName.toDictionary() == self.toDictionary()
+        if len(otherMappedName.mappedSections) != len(self.mappedSections):
+            return False
+        
+        for i, section in enumerate(self.mappedSections):
+            otherSection = otherMappedName.mappedSections[i]
+
+            if section != otherSection:
+                return False
+        
+        return True

@@ -1,3 +1,5 @@
+import copy
+
 class IndexedName:
     def __init__(self, elementType = "", indexNumber = 0):
         self.elementType = elementType
@@ -19,6 +21,9 @@ class IndexedName:
             returnName.indexNumber = int(indexedNameString[4:])
         
         return returnName
+    
+    def copy(self):
+        return copy.deepcopy(self)
     
     def __str__(self):
         return self.toString()
