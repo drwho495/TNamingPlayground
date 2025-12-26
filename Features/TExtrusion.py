@@ -39,6 +39,10 @@ class TExtrusion:
         if not hasattr(obj, "BooleanOperationType"):
             obj.addProperty("App::PropertyEnumeration", "BooleanOperationType")
             obj.BooleanOperationType = ["Fuse", "Cut", "Intersection", "None"]
+        
+        if not hasattr(obj, "Refine"):
+            obj.addProperty("App::PropertyBool", "Refine")
+            obj.Refine = True
     
     def attach(self, obj):
         self.updateProps(obj)
@@ -54,11 +58,6 @@ class TExtrusion:
         self.updateProps(obj)
 
         if obj.Support != None:
-            sketchShape = GeometryUtils.getFaceOfSketch(obj.Support)
-            mappedExtrusion = GeometryUtils.makeMappedExtrusion(sketchShape, App.Vector(0, 0, 10), obj.ID)[0]
-
-            obj.LastShapeIteration = obj.TShape.copy()
-
             part = obj.getParent()
             features = []
             index = 0
@@ -67,10 +66,20 @@ class TExtrusion:
                 if hasattr(groupObj, "TNamingType") and hasattr(groupObj, "TShape"):
                     if groupObj.Name == obj.Name: index = len(features)
 
-                    features.append(groupObj)            
+                    features.append(groupObj) 
+
+            sketchShape = GeometryUtils.getFaceOfSketch(obj.Support)
+            tag = obj.ID
 
             if index > 0 and obj.BooleanOperationType != "None":
-                lastFeature = features[index - 1]
+                tag = -tag
+
+            mappedExtrusion = GeometryUtils.makeMappedExtrusion(sketchShape, App.Vector(0, 0, 10), tag)[0]
+
+            obj.LastShapeIteration = obj.TShape.copy()           
+
+            if index > 0 and obj.BooleanOperationType != "None":
+                lastFeatureTShape = features[index - 1].TShape
                 booleanType = BooleanType.FUSE
 
                 if obj.BooleanOperationType == "Cut":
@@ -78,8 +87,10 @@ class TExtrusion:
                 elif obj.BooleanOperationType == "Intersection":
                     booleanType = BooleanType.INTERSECTION
 
-                mappedExtrusion.tag = -obj.ID
-                mappedResult = GeometryUtils.makeMappedBooleanOperation(mappedExtrusion, lastFeature.TShape, booleanType, obj.ID)[0]
+                mappedResult = GeometryUtils.makeMappedBooleanOperation(lastFeatureTShape, mappedExtrusion, booleanType, obj.ID)[0]
+
+                if obj.Refine:
+                    mappedResult = GeometryUtils.makeMappedRefineOperation(mappedResult, abs(lastFeatureTShape.tag), obj.ID)
 
                 obj.TShape = mappedResult
                 obj.Shape = mappedResult.getShape()

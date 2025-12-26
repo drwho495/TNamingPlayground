@@ -12,6 +12,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import Part
 from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakePrism
+from OCC.Core.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCC.Core.TopoDS import TopoDS_Shape
 from OCC.Core.gp import gp_Vec
 from OCC.Core.TopAbs import TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX
@@ -58,6 +59,80 @@ class ShapeHistoryList:
                 if name not in self.reverseHistoryList: self.reverseHistoryList[name] = []
 
                 self.reverseHistoryList[name].append(sourceIndexedName)
+
+def makeMappedRefineOperation(shape: TShape, baseShapeTag: int, tag: int = 0):
+    maker = ShapeUpgrade_UnifySameDomain(shape.getOCCTShape(), True, True, True)
+    maker.Build()
+
+    returnShape = TShape(maker.Shape(), ElementMap())
+
+    generatedShapes = ShapeHistoryList(0)
+    modifiedShapes = ShapeHistoryList(1)
+    history = maker.History()
+
+    for indexedNameStr, subElement in shape.getShapeMap().items():
+        indexedName = IndexedName.fromString(indexedNameStr)
+        indexedName.parentIdentifier = shape.tag
+
+        generatedShapes.extendList(indexedName,
+                                   history.Generated(subElement),
+                                   returnShape)
+    
+    for indexedNameStr, subElement in shape.getShapeMap().items():
+        indexedName = IndexedName.fromString(indexedNameStr)
+        indexedName.parentIdentifier = shape.tag
+
+        modifiedShapes.extendList(indexedName,
+                                  history.Modified(subElement),
+                                  returnShape)
+    
+    generatedShapes.updateReverseList()
+    modifiedShapes.updateReverseList()
+    
+    mapSubElement(returnShape, shape, appendedSection = MappedSection(opCode = OpCode.REFINE,
+                                                                      historyModifier = HistoryModifier.ITERATION,
+                                                                      mapModifier = MapModifier.REMAP,
+                                                                      iterationTag = returnShape.tag
+                                                                      )
+    )
+
+    for newIndexedName, sourceShapes in modifiedShapes.reverseHistoryList.items():
+        newMappedName = None
+        foundNameHasIDs = False
+
+        if len(sourceShapes) == 0:
+            continue
+
+        for sourceShapeIndexedName in sourceShapes:
+            foundName = shape.elementMap.getMappedName(sourceShapeIndexedName).copy()
+
+            if len(foundName.mappedSections) > 1 and foundName.mappedSections[-2].iterationTag == baseShapeTag:
+                if not foundNameHasIDs:
+                    newMappedName = foundName
+                    
+                    if len(foundName.masterIDs()) != 0:
+                        foundNameHasIDs = True
+                        break
+                        
+
+        if newMappedName == None:
+            newMappedName = shape.elementMap.getMappedName(sourceShapes[0])
+
+        newMappedName.mappedSections.append(MappedSection(opCode = OpCode.REFINE,
+                                                            historyModifier = HistoryModifier.ITERATION,
+                                                            mapModifier = MapModifier.REMAP,
+                                                            iterationTag = returnShape.tag,
+                                                            elementType = newIndexedName.elementType,
+                                                            forkedElement = len(sourceShapes) != 1,
+                                                            ancestors = [])
+        )
+
+        returnShape.elementMap.setElement(newIndexedName, newMappedName)
+
+    print(f"\n\ngenerated map: {generatedShapes.historyList}")
+    print(f"modified map: {modifiedShapes.historyList}")
+
+    return returnShape
 
 def makeMappedExtrusion(supportTShape: TShape, direction: App.Vector, tag: int = 0):
     vec = gp_Vec(direction.x, direction.y, direction.z)
@@ -220,13 +295,13 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
     opCode = None
 
     if booleanType == BooleanType.FUSE:
-        maker = BRepAlgoAPI_Fuse(operatorShape.getOCCTShape(), baseShape.getOCCTShape())
+        maker = BRepAlgoAPI_Fuse(baseShape.getOCCTShape(), operatorShape.getOCCTShape())
         opCode = OpCode.BOOLEAN_FUSE
     elif booleanType == BooleanType.CUT:
-        maker = BRepAlgoAPI_Cut(operatorShape.getOCCTShape(), baseShape.getOCCTShape())
+        maker = BRepAlgoAPI_Cut(baseShape.getOCCTShape(), operatorShape.getOCCTShape())
         opCode = OpCode.BOOLEAN_CUT
     elif booleanType == BooleanType.INTERSECTION:
-        maker = BRepAlgoAPI_Common(operatorShape.getOCCTShape(), baseShape.getOCCTShape())
+        maker = BRepAlgoAPI_Common(baseShape.getOCCTShape(), operatorShape.getOCCTShape())
         opCode = OpCode.BOOLEAN_INTERSECTION
 
     maker.Build()
