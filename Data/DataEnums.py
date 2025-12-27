@@ -2,13 +2,10 @@ from enum import Enum
 
 class OpCode(Enum):
     EXTRUSION = 1
-    BOOLEAN_CUT = 2
-    BOOLEAN_FUSE = 3
-    BOOLEAN_INTERSECTION = 4
-    FILLET = 5
-    CHAMFER = 6
+    DRESSUP = 5
     SKETCH = 7
     REFINE = 8
+    BOOLEAN = 9
 
 class MapModifier(Enum):
     COPY = 1
@@ -26,3 +23,7 @@ class BooleanType(Enum):
     FUSE = 1
     CUT = 2
     INTERSECTION = 3
+
+class DressupType(Enum):
+    FILLET = 1
+    CHAMFER = 2

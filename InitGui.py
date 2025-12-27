@@ -4,6 +4,7 @@ import locater
 import FreeCADGui as Gui
 import FreeCAD as App
 from Commands.CreateTExtrusion import CreateTExtrusion
+from Commands.CreateTDressup import CreateTDressup
 from Commands.CreateSelector import CreateSelector
 from Commands.SelectRootFeature import SelectRootFeature
 from Commands.DisplayElementHistory import DisplayElementHistory
@@ -34,7 +35,8 @@ class ToponamingBench(Gui.Workbench):
             "CreateTExtrusion",
             "DisplayElementHistory",
             "CreateSelector",
-            "SelectRootFeature"
+            "SelectRootFeature",
+            "CreateTDressup"
         ]
         
         self.appendToolbar("TNaming Features", featureCommands)

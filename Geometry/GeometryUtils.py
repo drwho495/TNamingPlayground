@@ -11,6 +11,8 @@ from Data.DataEnums import *
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
+from OCC.Core.BRepFilletAPI import BRepFilletAPI_MakeFillet
+from OCC.Core.BRepFilletAPI import BRepFilletAPI_MakeChamfer
 from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakePrism
 from OCC.Core.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCC.Core.TopoDS import TopoDS_Shape
@@ -24,6 +26,7 @@ from OCC.Core.BRepAlgoAPI import (
 from statistics import mode
 from TShape import TShape
 import Geometry.MappingUtils as MappingUtils
+from typing import List
 
 class ShapeHistoryList:
     def __init__(self, historyType: int):
@@ -130,6 +133,129 @@ def makeMappedRefineOperation(shape: TShape, baseShapeTag: int, tag: int = 0):
 
         returnShape.elementMap.setElement(newIndexedName, newMappedName)
 
+    print(f"\n\ngenerated map: {generatedShapes.historyList}")
+    print(f"modified map: {modifiedShapes.historyList}")
+
+    return returnShape
+
+def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElements: List[IndexedName], radius: float = 1, tag: int = 0):
+    baseShape.buildCache()
+    maker = None
+
+    if dressupType == DressupType.FILLET:
+        maker = BRepFilletAPI_MakeFillet(baseShape.getOCCTShape())
+    else:
+        maker = BRepFilletAPI_MakeChamfer(baseShape.getOCCTShape())
+
+    for element in dressupElements:
+        if element.elementType == "Edge":
+            maker.Add(radius, baseShape.getElement(element))
+    
+    maker.Build()
+
+    returnShape = TShape(maker.Shape(), ElementMap())
+    returnShape.tag = tag
+    returnShape.buildCache()
+
+    mapSubElement(returnShape, baseShape, appendedSection = MappedSection(opCode = OpCode.DRESSUP,
+                                                                          historyModifier = HistoryModifier.ITERATION,
+                                                                          mapModifier = MapModifier.REMAP,
+                                                                          iterationTag = returnShape.tag
+                                                                          )
+    )
+
+    generatedShapes = ShapeHistoryList(0)
+    modifiedShapes = ShapeHistoryList(1)
+
+    for indexedNameStr, subElement in baseShape.getShapeMap().items():
+        indexedName = IndexedName.fromString(indexedNameStr)
+        indexedName.parentIdentifier = baseShape.tag
+
+        generatedShapes.extendList(indexedName,
+                                   maker.Generated(subElement),
+                                   returnShape)
+
+    for indexedNameStr, subElement in baseShape.getShapeMap().items():
+        indexedName = IndexedName.fromString(indexedNameStr)
+        indexedName.parentIdentifier = baseShape.tag
+
+        modifiedShapes.extendList(indexedName,
+                                  maker.Modified(subElement),
+                                  returnShape)
+        
+    for sourceName, newShapes in modifiedShapes.historyList.items():
+        for i, newShapeIndexedName in enumerate(newShapes):
+            if returnShape.elementMap.hasIndexedName(newShapeIndexedName): continue
+
+            newMappedName = baseShape.elementMap.getMappedName(sourceName).copy()
+            
+            newMappedName.mappedSections.append(MappedSection(opCode = OpCode.DRESSUP,
+                                                              historyModifier = HistoryModifier.ITERATION,
+                                                              mapModifier = MapModifier.REMAP,
+                                                              iterationTag = returnShape.tag,
+                                                              elementType = newShapeIndexedName.elementType,
+                                                              index = i,
+                                                              ancestors = [])
+            )
+
+            returnShape.elementMap.setElement(newShapeIndexedName, newMappedName)
+    
+    for sourceName, newShapes in generatedShapes.historyList.items():
+        for i, newShapeIndexedName in enumerate(newShapes):
+            if returnShape.elementMap.hasIndexedName(newShapeIndexedName): continue
+
+            newMappedName = MappedName([MappedSection(opCode = OpCode.DRESSUP,
+                                                      historyModifier = HistoryModifier.NEW,
+                                                      mapModifier = MapModifier.REMAP,
+                                                      iterationTag = returnShape.tag,
+                                                      elementType = newShapeIndexedName.elementType,
+                                                      linkedNames = [baseShape.elementMap.getMappedName(sourceName).copy()],
+                                                      index = i,
+                                                      ancestors = [])
+                                        ]
+            ).copy()
+
+            newShape = returnShape.getElement(newShapeIndexedName)
+            faceEdges = returnShape.getSubElementsOfChild(newShape, "Edge")
+
+            for edgeI, edge in enumerate(faceEdges):
+                edgeIndexedName = returnShape.getIndexedNameOfShape(edge)
+
+                if not returnShape.elementMap.hasIndexedName(edgeIndexedName):
+                    newEdgeMappedName = MappedName([MappedSection(opCode = OpCode.DRESSUP,
+                                                              historyModifier = HistoryModifier.NEW,
+                                                              mapModifier = MapModifier.REMAP,
+                                                              iterationTag = returnShape.tag,
+                                                              elementType = "Edge",
+                                                              linkedNames = [newMappedName.copy()],
+                                                              index = edgeI,
+                                                              ancestors = [])
+                                               ]
+                    ).copy()
+
+                    edgeVertexes = returnShape.getSubElementsOfChild(edge, "Vertex")
+
+                    for vertexI, vertex in enumerate(edgeVertexes):
+                        vertexIndexedName = returnShape.getIndexedNameOfShape(vertex)
+
+                        if not returnShape.elementMap.hasIndexedName(vertexIndexedName):
+                            newVertexMappedName = MappedName([MappedSection(opCode = OpCode.DRESSUP,
+                                                                            historyModifier = HistoryModifier.NEW,
+                                                                            mapModifier = MapModifier.REMAP,
+                                                                            iterationTag = returnShape.tag,
+                                                                            elementType = "Vertex",
+                                                                            linkedNames = [newEdgeMappedName.copy()],
+                                                                            index = vertexI,
+                                                                            ancestors = [])
+                                                             ]
+                            ).copy()
+
+                            returnShape.elementMap.setElement(vertexIndexedName, newVertexMappedName)
+
+                    returnShape.elementMap.setElement(edgeIndexedName, newEdgeMappedName)
+
+            returnShape.elementMap.setElement(newShapeIndexedName, newMappedName)
+    
     print(f"\n\ngenerated map: {generatedShapes.historyList}")
     print(f"modified map: {modifiedShapes.historyList}")
 
@@ -293,17 +419,13 @@ def makeMappedExtrusion(supportTShape: TShape, direction: App.Vector, tag: int =
 
 def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, booleanType: BooleanType, tag: int = 0):
     maker = None
-    opCode = None
 
     if booleanType == BooleanType.FUSE:
         maker = BRepAlgoAPI_Fuse(baseShape.getOCCTShape(), operatorShape.getOCCTShape())
-        opCode = OpCode.BOOLEAN_FUSE
     elif booleanType == BooleanType.CUT:
         maker = BRepAlgoAPI_Cut(baseShape.getOCCTShape(), operatorShape.getOCCTShape())
-        opCode = OpCode.BOOLEAN_CUT
     elif booleanType == BooleanType.INTERSECTION:
         maker = BRepAlgoAPI_Common(baseShape.getOCCTShape(), operatorShape.getOCCTShape())
-        opCode = OpCode.BOOLEAN_INTERSECTION
 
     maker.Build()
 
@@ -311,14 +433,14 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
     returnShape.tag = tag
     returnShape.buildCache()
 
-    mapSubElement(returnShape, operatorShape, appendedSection = MappedSection(opCode = opCode,
+    mapSubElement(returnShape, operatorShape, appendedSection = MappedSection(opCode = OpCode.BOOLEAN,
                                                                               historyModifier = HistoryModifier.ITERATION,
                                                                               mapModifier = MapModifier.REMAP,
                                                                               iterationTag = returnShape.tag
                                                                             )
     )
 
-    mapSubElement(returnShape, baseShape, appendedSection = MappedSection(opCode = opCode,
+    mapSubElement(returnShape, baseShape, appendedSection = MappedSection(opCode = OpCode.BOOLEAN,
                                                                           historyModifier = HistoryModifier.ITERATION,
                                                                           mapModifier = MapModifier.REMAP,
                                                                           iterationTag = returnShape.tag
@@ -365,7 +487,7 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
                 for ancestorNameStr in returnShape.ancestorsMap[newShapeIndexedName.toString()]:
                     ancestors.append(ancestorNameStr)
 
-            newMappedName.mappedSections.append(MappedSection(opCode = opCode,
+            newMappedName.mappedSections.append(MappedSection(opCode = OpCode.BOOLEAN,
                                                               historyModifier = HistoryModifier.ITERATION,
                                                               mapModifier = MapModifier.REMAP,
                                                               iterationTag = returnShape.tag,
@@ -396,7 +518,7 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
             if len(mappedName.mappedSections) > 0: mappedNames.append(mappedName.copy())
 
         if len(mappedNames) > 0:
-            returnShape.elementMap.setElement(newShapeIndexedName, MappedName([MappedSection(opCode = opCode,
+            returnShape.elementMap.setElement(newShapeIndexedName, MappedName([MappedSection(opCode = OpCode.BOOLEAN,
                                               historyModifier = HistoryModifier.NEW,
                                               mapModifier = MapModifier.MERGE,
                                               iterationTag = returnShape.tag,

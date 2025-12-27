@@ -33,7 +33,7 @@ class MappedSection:
 
         # these variables do not change the history of an element, they are just used in searching algorithms
         # to improve the quality of their outputs. they are not to be used in equality checks!
-        self.alternativeNames = []
+        self.alternativeNames = alternativeNames
         self.forkedElement = forkedElement 
         self.ancestors = ancestors
     
