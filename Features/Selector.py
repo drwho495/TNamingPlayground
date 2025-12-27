@@ -50,9 +50,11 @@ class Selector:
                 elementShape = Part.__fromPythonOCC__(linkedObject.TShape.getElement(indexedNames[0]))
 
                 obj.Placement.Base = elementShape.CenterOfGravity
+                obj.ViewObject.DiffuseColor = (0.0, 1.0, 0.0)
 
                 print(f"Indexed Names: {indexedNames}")
             else:
+                obj.ViewObject.DiffuseColor = (1.0, 0.0, 0.0)
                 obj.Label = f"Broken Reference"
     
     def __setstate__(self, state):

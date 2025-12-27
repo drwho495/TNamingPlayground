@@ -31,7 +31,7 @@ class HistoryViewerWidget(QTreeWidget):
     def loadMappedName(self, mappedName: MappedName):
         self.clear()
 
-        for section in mappedName.mappedSections:
+        for i, section in enumerate(mappedName.mappedSections):
             sectionDict = section.toDictionary()
 
             self.addTopLevelItem(self._createItem("Operation Code", section.opCode.name))
@@ -43,8 +43,9 @@ class HistoryViewerWidget(QTreeWidget):
             self.addTopLevelItem(self._createItem("Element Type", section.elementType))
             self.addTopLevelItem(self._createItem("Element is Split", section.forkedElement))
             self.addTopLevelItem(self._createItem("Index", section.index))
+            self.addTopLevelItem(self._createItem("Alternate Name(s)", sectionDict["AlternativeNames"]))
             self.addTopLevelItem(self._createItem("Ancestor(s)", ",".join(section.ancestors)))
-            self.addTopLevelItem(self._createItem())
+            if (i + 1) != len(mappedName.mappedSections): self.addTopLevelItem(self._createItem())
 
         self.expandAll()
 

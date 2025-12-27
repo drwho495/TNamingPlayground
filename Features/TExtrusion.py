@@ -4,6 +4,7 @@ import os
 sys.path.append(os.path.dirname(__file__))
 
 import Geometry.GeometryUtils as GeometryUtils
+import Features.FeatureUtils as FeatureUtils
 from Geometry.TShape import TShape
 from Data.ElementMap import ElementMap
 from Data.DataEnums import *
@@ -58,15 +59,7 @@ class TExtrusion:
         self.updateProps(obj)
 
         if obj.Support != None:
-            part = obj.getParent()
-            features = []
-            index = 0
-
-            for groupObj in part.Group:
-                if hasattr(groupObj, "TNamingType") and hasattr(groupObj, "TShape"):
-                    if groupObj.Name == obj.Name: index = len(features)
-
-                    features.append(groupObj) 
+            features, index = FeatureUtils.getFeaturesAndIndex(obj)
 
             sketchShape = GeometryUtils.getFaceOfSketch(obj.Support)
             tag = obj.ID
