@@ -79,7 +79,12 @@ class TDressup:
             
                 mappedResult = GeometryUtils.makeMappedDressup(lastFeature.TShape,
                                                                DressupType.FILLET if obj.DressupType == "Fillet" else DressupType.CHAMFER,
-                                                               indexedElements)
+                                                               indexedElements,
+                                                               radius = 1,
+                                                               tag = obj.ID)
+
+                if obj.Refine:
+                    mappedResult = GeometryUtils.makeMappedRefineOperation(mappedResult, lastFeature.ID, mappedResult.tag)
                 
                 obj.TShape = mappedResult
                 obj.Shape = mappedResult.getShape()
