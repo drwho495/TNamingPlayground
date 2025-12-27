@@ -52,10 +52,12 @@ def complexCompare(searchName, searchShape, oldShape, loopName, allowVaryingHist
 
             section2 = smallerList[i]
 
+            if section1.iterationTag != section2.iterationTag:
+                continue
+
             simpleSectionCheck =   (section1.opCode          == section2.opCode
                                 and section1.historyModifier == section2.historyModifier
                                 and section1.mapModifier     == section2.mapModifier
-                                and section1.iterationTag    == section2.iterationTag
                                 and section1.elementType     == section2.elementType
                                 and section1.index           == section2.index)
             

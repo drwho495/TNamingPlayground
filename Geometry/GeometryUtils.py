@@ -69,6 +69,7 @@ def makeMappedRefineOperation(shape: TShape, baseShapeTag: int, tag: int = 0):
     generatedShapes = ShapeHistoryList(0)
     modifiedShapes = ShapeHistoryList(1)
     history = maker.History()
+    returnShape.tag = tag
 
     for indexedNameStr, subElement in shape.getShapeMap().items():
         indexedName = IndexedName.fromString(indexedNameStr)

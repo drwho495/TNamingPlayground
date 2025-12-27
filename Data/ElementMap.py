@@ -1,13 +1,22 @@
 from Data.MappedName import MappedName
+from Data.IndexedName import IndexedName
 import copy
 
 class ElementMap:
     def __init__(self):
         self.internalMap = {}
+        self.tagsInHistory = []
 
     def setElement(self, indexedName, mappedName):
         self.internalMap[indexedName.toString()] = mappedName
+
+        for section in mappedName.mappedSections:
+            if section.iterationTag not in self.tagsInHistory:
+                self.tagsInHistory.append(section.iterationTag)
     
+    def hasTag(self, tag):
+        return tag in self.tagsInHistory
+
     def hasIndexedName(self, indexedName):
         return indexedName.toString() in self.internalMap
     
@@ -44,7 +53,9 @@ class ElementMap:
         
         return newElementMap
 
-    def getIndexedName(self, mappedName):
-        for loopIName, loopMName in self.internalMap.items():
-            if loopMName.equal(mappedName):
-                return loopIName
+    def getIndexedName(self, mappedName: MappedName):
+        for loopIndexedName, loopMappedName in self.internalMap.items():
+            if loopMappedName.equal(mappedName):
+                return IndexedName.fromString(loopIndexedName)
+        
+        return IndexedName()

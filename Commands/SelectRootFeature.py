@@ -37,12 +37,29 @@ class SelectRootFeature:
                     for obj in document.Objects:
                         if obj.ID == abs(mappedName.mappedSections[0].iterationTag):
                             Gui.Selection.clearSelection()
-                            Gui.Selection.addSelection(document.Name, obj.Name)
 
                             features, index = FeatureUtils.getFeaturesAndIndex(obj)
 
                             for i, feature in enumerate(features):
-                                feature.Visibility = (i == index)
+                                if i == index:
+                                    feature.Visibility = True
+                                    rebuiltMappedName = MappedName().copy()
+                                    foundTag = False
+
+                                    for section in mappedName.mappedSections:
+                                        if abs(section.iterationTag) == obj.ID:
+                                            foundTag = True
+                                        else:
+                                            if foundTag == True:
+                                                break
+                                        rebuiltMappedName.mappedSections.append(section.copy())
+
+                                    indexedName = feature.TShape.getIndexedName(rebuiltMappedName)
+
+                                    if indexedName.indexNumber != 0:
+                                        Gui.Selection.addSelection(document.Name, feature.Name, indexedName.toString())
+                                else:
+                                    feature.Visibility = False
 
                             break
                     

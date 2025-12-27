@@ -169,9 +169,7 @@ class TShape:
                 self.shapeMap[f"{MappingUtils.getElementTypeName(elementType)}{i}"] = internalShapeMap.FindKey(i)
 
     def getIndexedName(self, searchName: MappedName):
-        for loopName, shape in self.getIDShapeMap().items():
-            if loopName == searchName:
-                return self.getIndexedNameOfShape(shape)
+        return self.elementMap.getIndexedName(searchName)
 
     def getElement(self, name):
         if self.shapeMap == None: self.buildShapeMap(False)
