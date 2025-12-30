@@ -35,27 +35,33 @@ class Selector:
     
     def execute(self, obj):
         self.updateProps(obj)
-
-        if obj.Shape.isNull():
-            obj.Shape = Part.makeSphere(2)
         
+        obj.Placement = App.Placement()
         linkedObject = obj.Document.getObject(obj.LinkedObjectName)
 
         if hasattr(linkedObject, "TNamingType") and hasattr(linkedObject, "TShape"):
             mappedName = MappedName.fromDictionary(json.loads(obj.LinkedMappedName))
             indexedNames = MappingUtils.searchForSimilarNames(mappedName, linkedObject.TShape, linkedObject.LastShapeIteration)
+            spheres = []
 
-            if len(indexedNames) != 0:
-                obj.Label = f"Selected Element: {indexedNames[0].toString()}"
-                elementShape = Part.__fromPythonOCC__(linkedObject.TShape.getElement(indexedNames[0]))
+            print(f"Indexed Names: {indexedNames}")
 
-                obj.Placement.Base = elementShape.CenterOfGravity
-                obj.ViewObject.DiffuseColor = (0.0, 1.0, 0.0)
+            for indexedName in indexedNames:
+                obj.Label = f"Selected Element: {indexedName.toString()}"
+                elementShape = Part.__fromPythonOCC__(linkedObject.TShape.getElement(indexedName))
 
-                print(f"Indexed Names: {indexedNames}")
-            else:
+                sphere = Part.makeSphere(3)
+                sphere.Placement.Base = elementShape.CenterOfGravity
+
+                spheres.append(sphere)
+            
+            if len(indexedNames) == 0:
                 obj.ViewObject.DiffuseColor = (1.0, 0.0, 0.0)
                 obj.Label = f"Broken Reference"
+            else:
+                obj.ViewObject.DiffuseColor = (0.0, 0.0, 1.0)
+                
+                obj.Shape = Part.makeCompound(spheres)
     
     def __setstate__(self, state):
         return None

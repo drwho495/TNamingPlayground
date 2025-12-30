@@ -41,6 +41,14 @@ class MappedName:
         
         return ""
     
+    def getIterationTags(self):
+        tags = []
+
+        for section in self.mappedSections:
+            tags.append(section.iterationTag)
+        
+        return tags
+    
     # this is a base equality check, we will do more complicated searching checks later
     def equal(self, otherMappedName):
         if len(otherMappedName.mappedSections) != len(self.mappedSections):

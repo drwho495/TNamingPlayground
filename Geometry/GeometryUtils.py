@@ -102,13 +102,16 @@ def makeMappedRefineOperation(shape: TShape, baseShapeTag: int, tag: int = 0):
 
     for newIndexedName, sourceShapes in modifiedShapes.reverseHistoryList.items():
         newMappedName = None
+        otherMappedNames = []
         foundNameHasIDs = False
 
         if len(sourceShapes) == 0:
             continue
-
+            
         for sourceShapeIndexedName in sourceShapes:
             foundName = shape.elementMap.getMappedName(sourceShapeIndexedName).copy()
+
+            otherMappedNames.append(foundName)
 
             if len(foundName.mappedSections) > 1 and foundName.mappedSections[-2].iterationTag == baseShapeTag:
                 if not foundNameHasIDs:
@@ -116,21 +119,27 @@ def makeMappedRefineOperation(shape: TShape, baseShapeTag: int, tag: int = 0):
                     
                     if len(foundName.masterIDs()) != 0:
                         foundNameHasIDs = True
-                        break
-                        
 
         if newMappedName == None:
             newMappedName = shape.elementMap.getMappedName(sourceShapes[0])
 
-        newMappedName.mappedSections.append(MappedSection(opCode = OpCode.REFINE,
-                                                            historyModifier = HistoryModifier.ITERATION,
-                                                            mapModifier = MapModifier.REMAP,
-                                                            iterationTag = returnShape.tag,
-                                                            elementType = newIndexedName.elementType,
-                                                            forkedElement = len(sourceShapes) != 1,
-                                                            ancestors = [])
-        )
+        otherMappedNames.remove(newMappedName)
+        
+        newSection = MappedSection(opCode = OpCode.REFINE,
+                                   historyModifier = HistoryModifier.ITERATION,
+                                   mapModifier = MapModifier.REMAP,
+                                   iterationTag = returnShape.tag,
+                                   elementType = newIndexedName.elementType,
+                                   ancestors = [],
+                                   deletedNames = []).copy()
+        
+        if newIndexedName.toString() == "Face4":
+            print(f"other mapped name len: {len(otherMappedNames)}, in: {newIndexedName.toString()}, source shapes len: {len(sourceShapes)}")
 
+        for otherMappedName in otherMappedNames:
+            newSection.deletedNames.append(otherMappedName.copy())
+ 
+        newMappedName.mappedSections.append(newSection)
         returnShape.elementMap.setElement(newIndexedName, newMappedName)
 
     print(f"\n\ngenerated map: {generatedShapes.historyList}")
@@ -486,23 +495,43 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
             if len(newShapes) > 1 and newShapeIndexedName.toString() in returnShape.ancestorsMap:
                 for ancestorNameStr in returnShape.ancestorsMap[newShapeIndexedName.toString()]:
                     ancestors.append(ancestorNameStr)
-
+            
             newMappedName.mappedSections.append(MappedSection(opCode = OpCode.BOOLEAN,
                                                               historyModifier = HistoryModifier.ITERATION,
                                                               mapModifier = MapModifier.REMAP,
                                                               iterationTag = returnShape.tag,
                                                               elementType = newShapeIndexedName.elementType,
                                                               index = i,
+                                                              totalNumberOfSectionElements = len(newShapes),
                                                               forkedElement = len(newShapes) != 1,
-                                                              ancestors = [])
-            )
+                                                              ancestors = []))
 
             returnShape.elementMap.setElement(newShapeIndexedName, newMappedName)
-            
-            MappingUtils.addAncestorsToSection(returnShape.elementMap.getMappedName(newShapeIndexedName).mappedSections[-1],
-                                               returnShape.getElement(newShapeIndexedName),
-                                               returnShape)
     
+    returnShape.buildCache()
+    # allowedVertexNames = []
+
+    # for name, shape in returnShape.getIDShapeMap().items():
+    #     indexedName = returnShape.getIndexedNameOfShape(shape)
+
+    #     if indexedName.elementType != "Vertex":
+    #         vertexes = returnShape.getSubElementsOfChild(shape, "Vertex")
+
+    #         for vertex in vertexes:
+    #             vertexIndexedName = returnShape.getIndexedNameOfShape(vertex)
+    #             vertexMappedName = returnShape.elementMap.getMappedName(vertexIndexedName)
+
+    #             if (vertexIndexedName in allowedVertexNames 
+    #                 or (vertexMappedName not in name.mappedSections[-1].ancestors
+    #                 and vertexMappedName != None
+    #                 and len(vertexMappedName.mappedSections) != 0
+    #                 and vertexMappedName.mappedSections[0] != tag)
+    #             ):
+    #                 # print("add ancestor")
+
+    #                 allowedVertexNames.append(vertexIndexedName)
+    #                 name.mappedSections[-1].ancestors.append(vertexMappedName.copy())
+            
     for newShapeIndexedName, sourceShapeNames in generatedShapes.reverseHistoryList.items():
         mappedNames = []
         if returnShape.elementMap.hasIndexedName(newShapeIndexedName): continue
@@ -526,10 +555,6 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
                                               elementType = newShapeIndexedName.elementType)]
                 )
             )
-
-            MappingUtils.addAncestorsToSection(returnShape.elementMap.getMappedName(newShapeIndexedName).mappedSections[-1],
-                                               returnShape.getElement(newShapeIndexedName),
-                                               returnShape)
 
     print(f"generated map: {generatedShapes.historyList}")
     print(f"modified map: {modifiedShapes.historyList}")

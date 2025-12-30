@@ -17,8 +17,9 @@ class MappedSection:
                  referenceIDs = "",
                  elementType = "",
                  index = 0,
+                 totalNumberOfSectionElements = 1,
                  forkedElement = False,
-                 alternativeNames = [],
+                 deletedNames = [],
                  ancestors = []
 
     ):
@@ -33,7 +34,8 @@ class MappedSection:
 
         # these variables do not change the history of an element, they are just used in searching algorithms
         # to improve the quality of their outputs. they are not to be used in equality checks!
-        self.alternativeNames = alternativeNames
+        self.totalNumberOfSectionElements = totalNumberOfSectionElements
+        self.deletedNames = deletedNames
         self.forkedElement = forkedElement 
         self.ancestors = ancestors
     
@@ -47,17 +49,21 @@ class MappedSection:
                       "MapModifier": self.mapModifier.value,
                       "IterationTag": self.iterationTag,
                       "ReferenceIDs": self.referenceIDs,
-                      "LinkedNames": [],
-                      "AlternativeNames": [],
                       "ForkedElement": self.forkedElement,
-                      "Ancestors": self.ancestors,
+                      "LinkedNames": [],
+                      "DeletedNames": [],
+                      "TotalNumberOfSectionElements": self.totalNumberOfSectionElements,
+                      "Ancestors": [],
                       "Index": self.index}
 
         for linkedName in self.linkedNames:
             returnDict["LinkedNames"].append(linkedName.toDictionary())
         
-        for alternativeName in self.alternativeNames:
-            returnDict["AlternativeNames"].append(alternativeName.toDictionary())
+        for deletedName in self.deletedNames:
+            returnDict["DeletedNames"].append(deletedName.toDictionary())
+        
+        for ancestorName in self.ancestors:
+            returnDict["Ancestors"].append(ancestorName.toDictionary())
 
         return returnDict
     
@@ -94,16 +100,21 @@ class MappedSection:
                                          mapModifier = MapModifier(dictionary["MapModifier"]),
                                          iterationTag = dictionary["IterationTag"],
                                          referenceIDs = dictionary["ReferenceIDs"],
-                                         ancestors = dictionary["Ancestors"],
+                                         totalNumberOfSectionElements = dictionary["TotalNumberOfSectionElements"],
                                          forkedElement = dictionary["ForkedElement"],
                                          index = dictionary["Index"]).copy()
-        
-        print(f"linked name size: {len(dictionary['LinkedNames'])}")
         
         for linkedName in dictionary["LinkedNames"]:
             newMappedSection.linkedNames.append(MappedName.fromDictionary(linkedName))
 
-        for alternativeName in dictionary["AlternativeNames"]:
-            newMappedSection.alternativeNames.append(MappedName.fromDictionary(alternativeName))
+        if "DeletedNames" in dictionary:
+            for deletedName in dictionary["DeletedNames"]:
+                newMappedSection.deletedNames.append(MappedName.fromDictionary(deletedName))
+        elif "AlternativeNames" in dictionary:
+            for alternativeName in dictionary["AlternativeNames"]:
+                newMappedSection.deletedNames.append(MappedName.fromDictionary(alternativeName))
+        
+        for ancestorName in dictionary["Ancestors"]:
+            newMappedSection.ancestors.append(MappedName.fromDictionary(ancestorName))
 
         return newMappedSection
