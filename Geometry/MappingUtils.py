@@ -177,7 +177,7 @@ def searchForSimilarNames(searchName, searchShape, oldShape, allowVaryingHistory
 
     for loopIndexedNameString, loopMappedName in searchShape.elementMap.internalMap.items():
         if complexCompare(searchName, searchShape, oldShape, loopMappedName, allowVaryingHistory, [], debugCheckName):
-            foundNames.append(IndexedName.fromString(loopIndexedNameString))
+            foundNames.append((loopMappedName, IndexedName.fromString(loopIndexedNameString)))
     
     return foundNames
 

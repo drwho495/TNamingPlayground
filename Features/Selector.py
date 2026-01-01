@@ -41,21 +41,21 @@ class Selector:
 
         if hasattr(linkedObject, "TNamingType") and hasattr(linkedObject, "TShape"):
             mappedName = MappedName.fromDictionary(json.loads(obj.LinkedMappedName))
-            indexedNames = MappingUtils.searchForSimilarNames(mappedName, linkedObject.TShape, linkedObject.LastShapeIteration)
+            foundNames = MappingUtils.searchForSimilarNames(mappedName, linkedObject.TShape, linkedObject.LastShapeIteration)
             spheres = []
 
-            print(f"Indexed Names: {indexedNames}")
+            print(f"Indexed Names: {foundNames}")
 
-            for indexedName in indexedNames:
-                obj.Label = f"Selected Element: {indexedName.toString()}"
-                elementShape = Part.__fromPythonOCC__(linkedObject.TShape.getElement(indexedName))
+            for foundName in foundNames:
+                obj.Label = f"Selected Element: {foundName[1].toString()}"
+                elementShape = Part.__fromPythonOCC__(linkedObject.TShape.getElement(foundName[1]))
 
                 sphere = Part.makeSphere(3)
                 sphere.Placement.Base = elementShape.CenterOfGravity
 
                 spheres.append(sphere)
             
-            if len(indexedNames) == 0:
+            if len(foundNames) == 0:
                 obj.ViewObject.DiffuseColor = (1.0, 0.0, 0.0)
                 obj.Label = f"Broken Reference"
             else:

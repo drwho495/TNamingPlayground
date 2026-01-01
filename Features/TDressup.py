@@ -70,12 +70,16 @@ class TDressup:
                 lastFeature = features[index - 1]
 
                 indexedElements = []
+                mappedNames = []
 
                 for element in obj.Elements:
                     mappedName = MappedName.fromDictionary(json.loads(element))
-                    indexedNames = MappingUtils.searchForSimilarNames(mappedName, lastFeature.TShape, lastFeature.LastShapeIteration)
+                    foundNames = MappingUtils.searchForSimilarNames(mappedName, lastFeature.TShape, lastFeature.LastShapeIteration)
 
-                    indexedElements.extend(indexedNames)
+                    for foundName in foundNames:
+                        if foundName[1] not in indexedElements:
+                            mappedNames.append(json.dumps(foundName[0].toDictionary()))
+                            indexedElements.append(foundName[1])
             
                 mappedResult = GeometryUtils.makeMappedDressup(lastFeature.TShape,
                                                                DressupType.FILLET if obj.DressupType == "Fillet" else DressupType.CHAMFER,
@@ -88,6 +92,7 @@ class TDressup:
                 
                 obj.TShape = mappedResult
                 obj.Shape = mappedResult.getShape()
+                obj.Elements = mappedNames
                 obj.TElementMap = json.dumps(mappedResult.elementMap.toDictionary())
 
                 GeometryUtils.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)

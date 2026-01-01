@@ -43,7 +43,7 @@ class HistoryViewerWidget(QTreeWidget):
             self.addTopLevelItem(self._createItem("Element Type", section.elementType))
             self.addTopLevelItem(self._createItem("Element is Split", section.forkedElement))
             self.addTopLevelItem(self._createItem("Index", section.index))
-            self.addTopLevelItem(self._createItem("Number Of Split Elements", section.numberOfSplitElements))
+            self.addTopLevelItem(self._createItem("Number Of Split Elements", section.totalNumberOfSectionElements))
             self.addTopLevelItem(self._createItem("Deleted Name(s)", sectionDict["DeletedNames"]))
             self.addTopLevelItem(self._createItem("Ancestor(s)", sectionDict["Ancestors"]))
             if (i + 1) != len(mappedName.mappedSections): self.addTopLevelItem(self._createItem())

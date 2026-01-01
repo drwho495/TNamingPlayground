@@ -204,6 +204,7 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
                                                               iterationTag = returnShape.tag,
                                                               elementType = newShapeIndexedName.elementType,
                                                               index = i,
+                                                              totalNumberOfSectionElements = len(newShapes),
                                                               ancestors = [])
             )
 
@@ -220,6 +221,7 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
                                                       elementType = newShapeIndexedName.elementType,
                                                       linkedNames = [baseShape.elementMap.getMappedName(sourceName).copy()],
                                                       index = i,
+                                                      totalNumberOfSectionElements = len(newShapes),
                                                       ancestors = [])
                                         ]
             ).copy()
@@ -238,6 +240,7 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
                                                               elementType = "Edge",
                                                               linkedNames = [newMappedName.copy()],
                                                               index = edgeI,
+                                                              totalNumberOfSectionElements = len(faceEdges),
                                                               ancestors = [])
                                                ]
                     ).copy()
@@ -255,6 +258,7 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
                                                                             elementType = "Vertex",
                                                                             linkedNames = [newEdgeMappedName.copy()],
                                                                             index = vertexI,
+                                                                            totalNumberOfSectionElements = len(edgeVertexes),
                                                                             ancestors = [])
                                                              ]
                             ).copy()
