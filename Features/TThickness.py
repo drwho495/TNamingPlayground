@@ -15,7 +15,7 @@ import FreeCADGui as Gui
 import FreeCAD as App
 import json
 
-class TDressup:
+class TThickness:
     def __init__(self, obj):
         obj.Proxy = self
         self.updateProps(obj)
@@ -29,10 +29,10 @@ class TDressup:
             obj.addProperty("App::PropertyPythonObject", "TShape")
             obj.TShape = TShape()
 
-        if not hasattr(obj, "Radius"):
-            obj.addProperty("App::PropertyLength", "Radius")
-            obj.Radius = 1
-        
+        if not hasattr(obj, "Offset"):
+            obj.addProperty("App::PropertyDistance", "Offset")
+            obj.Offset = 1
+
         if not hasattr(obj, "LastShapeIteration"):
             obj.addProperty("App::PropertyPythonObject", "LastShapeIteration")
             obj.LastShapeIteration = TShape()
@@ -41,12 +41,8 @@ class TDressup:
             obj.addProperty("App::PropertyString", "TNamingType")
             obj.TNamingType = "TDressup"
         
-        if not hasattr(obj, "DressupType"):
-            obj.addProperty("App::PropertyEnumeration", "DressupType")
-            obj.DressupType = ["Fillet", "Chamfer"]
-        
-        if not hasattr(obj, "Elements"):
-            obj.addProperty("App::PropertyStringList", "Elements")
+        if not hasattr(obj, "Faces"):
+            obj.addProperty("App::PropertyStringList", "Faces")
 
         if not hasattr(obj, "Refine"):
             obj.addProperty("App::PropertyBool", "Refine")
@@ -67,7 +63,7 @@ class TDressup:
 
         obj.LastShapeIteration = obj.TShape.copy()
 
-        if len(obj.Elements) != 0:
+        if len(obj.Faces) != 0:
             features, index = FeatureUtils.getFeaturesAndIndex(obj)
 
             if index != 0:
@@ -76,7 +72,7 @@ class TDressup:
                 indexedElements = []
                 mappedNames = []
 
-                for element in obj.Elements:
+                for element in obj.Faces:
                     mappedName = MappedName.fromDictionary(json.loads(element))
                     foundNames = MappingUtils.searchForSimilarNames(mappedName, lastFeature.TShape, lastFeature.LastShapeIteration)
 
@@ -85,18 +81,15 @@ class TDressup:
                             mappedNames.append(json.dumps(foundName[0].toDictionary()))
                             indexedElements.append(foundName[1])
             
-                mappedResult = GeometryUtils.makeMappedDressup(lastFeature.TShape,
-                                                               DressupType.FILLET if obj.DressupType == "Fillet" else DressupType.CHAMFER,
-                                                               indexedElements,
-                                                               radius = obj.Radius.Value,
-                                                               tag = obj.ID)
+                mappedResult = GeometryUtils.makeMappedThickness(lastFeature.TShape, indexedElements, obj.Offset.Value, obj.ID)
 
                 if obj.Refine:
-                    mappedResult = GeometryUtils.makeMappedRefineOperation(mappedResult, lastFeature.ID, mappedResult.tag)
+                    pass
+                    # mappedResult = GeometryUtils.makeMappedRefineOperation(mappedResult, lastFeature.ID, mappedResult.tag)
                 
                 obj.TShape = mappedResult
                 obj.Shape = mappedResult.getShape()
-                obj.Elements = mappedNames
+                obj.Faces = mappedNames
                 obj.TElementMap = json.dumps(mappedResult.elementMap.toDictionary())
 
                 GeometryUtils.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)
@@ -110,7 +103,7 @@ class TDressup:
     def loads(self, state):
         return None
 
-class TDressupViewObject:
+class TThicknessViewObject:
     def __init__(self, obj):
         obj.ViewObject.Proxy = self
         self.updateProps(obj.ViewObject)
@@ -144,7 +137,7 @@ class TDressupViewObject:
     def loads(self, state):
         return None
     
-def makeDressup(dressupType = DressupType.FILLET):
+def makeThickness():
     selection = Gui.Selection.getCompleteSelection()
 
     if len(selection) > 0:
@@ -152,10 +145,10 @@ def makeDressup(dressupType = DressupType.FILLET):
 
         if FeatureUtils.isTNamingFeature(featureObj):
             lastFeature = FeatureUtils.getFeaturesAndIndex(featureObj)[0][-1]
-            obj = App.ActiveDocument.addObject("Part::FeaturePython", "Fillet" if dressupType == DressupType.FILLET else "Chamfer")
+            obj = App.ActiveDocument.addObject("Part::FeaturePython", "Thickness")
 
-            TDressup(obj)
-            TDressupViewObject(obj)
+            TThickness(obj)
+            TThicknessViewObject(obj)
 
             parent = lastFeature.getParent()
 
@@ -173,7 +166,7 @@ def makeDressup(dressupType = DressupType.FILLET):
                                 
                         elements.append(json.dumps(elementMap.getMappedName(indexedName).toDictionary()))
             
-            obj.Elements = elements
+            obj.Faces = elements
             obj.recompute()
 
             Gui.Selection.clearSelection()

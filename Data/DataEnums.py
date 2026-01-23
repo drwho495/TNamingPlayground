@@ -6,12 +6,13 @@ class OpCode(Enum):
     SKETCH = 7
     REFINE = 8
     BOOLEAN = 9
+    THICKNESS = 10
+    COMPOUND = 11
 
 class MapModifier(Enum):
     COPY = 1
     REMAP = 2
     MERGE = 3
-    SPLIT = 4
     SOURCE = 5
     EXTRUDED = 6
 

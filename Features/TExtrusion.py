@@ -21,6 +21,10 @@ class TExtrusion:
         if not hasattr(obj, "TElementMap"):
             obj.addProperty("App::PropertyString", "TElementMap")
             obj.TElementMap = "{}"
+
+        if not hasattr(obj, "Length"):
+            obj.addProperty("App::PropertyDistance", "Length")
+            obj.Length = 10
         
         if not hasattr(obj, "Support"):
             obj.addProperty("App::PropertyLink", "Support")
@@ -39,7 +43,7 @@ class TExtrusion:
 
         if not hasattr(obj, "BooleanOperationType"):
             obj.addProperty("App::PropertyEnumeration", "BooleanOperationType")
-            obj.BooleanOperationType = ["Fuse", "Cut", "Intersection", "None"]
+            obj.BooleanOperationType = ["Fuse", "Cut", "Intersection", "None", "Compound"]
         
         if not hasattr(obj, "Refine"):
             obj.addProperty("App::PropertyBool", "Refine")
@@ -62,28 +66,36 @@ class TExtrusion:
             features, index = FeatureUtils.getFeaturesAndIndex(obj)
 
             sketchShape = GeometryUtils.getFaceOfSketch(obj.Support)
+            normal = obj.Support.Placement.Rotation.multVec(App.Vector(0, 0, 1))
+            extrusionDirection = normal.multiply(obj.Length.Value)
             tag = obj.ID
 
             if index > 0 and obj.BooleanOperationType != "None":
                 tag = -tag
 
-            mappedExtrusion = GeometryUtils.makeMappedExtrusion(sketchShape, App.Vector(0, 0, 10), tag)[0]
+            mappedExtrusion = GeometryUtils.makeMappedExtrusion(sketchShape, extrusionDirection, tag)[0]
 
             obj.LastShapeIteration = obj.TShape.copy()           
 
             if index > 0 and obj.BooleanOperationType != "None":
                 lastFeatureTShape = features[index - 1].TShape
-                booleanType = BooleanType.FUSE
+                booleanType = None
+                mappedResult = TShape()
 
-                if obj.BooleanOperationType == "Cut":
+                if obj.BooleanOperationType == "Fuse":
+                    booleanType = BooleanType.FUSE
+                elif obj.BooleanOperationType == "Cut":
                     booleanType = BooleanType.CUT
                 elif obj.BooleanOperationType == "Intersection":
                     booleanType = BooleanType.INTERSECTION
 
-                mappedResult = GeometryUtils.makeMappedBooleanOperation(lastFeatureTShape, mappedExtrusion, booleanType, obj.ID)[0]
+                if booleanType != None:
+                    mappedResult = GeometryUtils.makeMappedBooleanOperation(lastFeatureTShape, mappedExtrusion, booleanType, obj.ID)[0]
 
-                if obj.Refine:
-                    mappedResult = GeometryUtils.makeMappedRefineOperation(mappedResult, abs(lastFeatureTShape.tag), obj.ID)
+                    if obj.Refine:
+                        mappedResult = GeometryUtils.makeMappedRefineOperation(mappedResult, abs(lastFeatureTShape.tag), obj.ID)
+                elif obj.BooleanOperationType == "Compound":
+                    mappedResult = GeometryUtils.makeMappedCompound([lastFeatureTShape, mappedExtrusion], obj.ID)
 
                 obj.TShape = mappedResult
                 obj.Shape = mappedResult.getShape()
@@ -142,7 +154,31 @@ class TExtrusionViewObject:
         return None
     
 def makeExtrusion():
-    obj = App.ActiveDocument.addObject("Part::FeaturePython", "Extrusion")
+    selection = Gui.Selection.getSelection()
+    error = "Please select a sketch to extrude!"
 
-    TExtrusion(obj)
-    TExtrusionViewObject(obj)
+    if len(selection) == 1:
+        selObj = selection[0]
+
+        if selObj.TypeId == "Sketcher::SketchObject":
+            error = None
+            parent = selObj.getParent()
+
+            if parent != None:
+                obj = App.ActiveDocument.addObject("Part::FeaturePython", "Extrusion")
+
+                TExtrusion(obj)
+                TExtrusionViewObject(obj)
+
+                obj.Support = selObj
+                group = parent.Group
+
+                group.append(obj)
+                parent.Group = group
+
+                FeatureUtils.showFeature(obj)
+            else:
+                error = "Please select a sketch that is in a part to extrude!"
+    
+    if error != None:
+        App.Console.PrintError(error)

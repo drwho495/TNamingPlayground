@@ -11,10 +11,14 @@ from Data.DataEnums import *
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
+from OCC.Core.TopoDS import TopoDS_Compound
+from OCC.Core.BRep import BRep_Builder
 from OCC.Core.BRepFilletAPI import BRepFilletAPI_MakeFillet
 from OCC.Core.BRepFilletAPI import BRepFilletAPI_MakeChamfer
 from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakePrism
 from OCC.Core.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+from OCC.Core.TopTools import TopTools_ListOfShape
+from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakeThickSolid
 from OCC.Core.TopoDS import TopoDS_Shape
 from OCC.Core.gp import gp_Vec
 from OCC.Core.TopAbs import TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX
@@ -27,6 +31,7 @@ from statistics import mode
 from TShape import TShape
 import Geometry.MappingUtils as MappingUtils
 from typing import List
+from OCC.Core.GeomAbs import GeomAbs_Arc
 
 class ShapeHistoryList:
     def __init__(self, historyType: int):
@@ -140,7 +145,7 @@ def makeMappedRefineOperation(shape: TShape, baseShapeTag: int, tag: int = 0):
             newSection.deletedNames.append(otherMappedName.copy())
  
         newMappedName.mappedSections.append(newSection)
-        returnShape.elementMap.setElement(newIndexedName, newMappedName)
+        returnShape.elementMap.setElement(newIndexedName, newMappedName.copy())
 
     print(f"\n\ngenerated map: {generatedShapes.historyList}")
     print(f"modified map: {modifiedShapes.historyList}")
@@ -270,6 +275,154 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
             returnShape.elementMap.setElement(newShapeIndexedName, newMappedName)
     
     print(f"\n\ngenerated map: {generatedShapes.historyList}")
+    print(f"modified map: {modifiedShapes.historyList}")
+
+    return returnShape
+
+def makeMappedCompound(compoundShapes: List[TShape], tag: int = 0):
+    builder = BRep_Builder()
+    compound = TopoDS_Compound()
+
+    builder.MakeCompound(compound)
+
+    for shape in compoundShapes:
+        builder.Add(compound, shape.getOCCTShape())
+    
+    returnShape = TShape(compound, ElementMap() )
+    returnShape.tag = tag
+
+    for shape in compoundShapes:
+        mapSubElement(returnShape, shape, appendedSection = MappedSection(opCode = OpCode.COMPOUND,
+                                                                          historyModifier = HistoryModifier.ITERATION,
+                                                                          mapModifier = MapModifier.REMAP,
+                                                                          iterationTag = returnShape.tag,
+                                                                          ancestors = [],
+                                                                          deletedNames = []).copy())
+    
+    return returnShape
+
+def makeMappedThickness(baseShape: TShape, faces: List[IndexedName], offset: int, tag: int = 0):
+    baseShape.buildCache()
+
+    facesShapes = TopTools_ListOfShape()
+
+    for element in faces:
+        if element.elementType == "Face":
+            facesShapes.Append(baseShape.getElement(element))
+    
+    maker = BRepOffsetAPI_MakeThickSolid()
+    maker.MakeThickSolidByJoin(
+        baseShape.getOCCTShape(),
+        facesShapes,
+        offset,
+        1e-4,
+        # False,          # intersection
+        # False,          # self-intersection
+        # GeomAbs_Arc     # join type (rounded edges)
+    )
+
+    maker.Build()
+
+    returnShape = TShape(maker.Shape(), ElementMap())
+    returnShape.tag = tag
+    returnShape.buildCache()
+
+    mapSubElement(returnShape, baseShape, appendedSection = MappedSection(opCode = OpCode.THICKNESS,
+                                                                          historyModifier = HistoryModifier.ITERATION,
+                                                                          mapModifier = MapModifier.REMAP,
+                                                                          iterationTag = returnShape.tag
+                                                                          )
+    )
+
+    generatedShapes = ShapeHistoryList(0)
+    modifiedShapes = ShapeHistoryList(1)
+
+    for indexedNameStr, subElement in baseShape.getShapeMap().items():
+        indexedName = IndexedName.fromString(indexedNameStr)
+        indexedName.parentIdentifier = baseShape.tag
+
+        generatedShapes.extendList(indexedName,
+                                   maker.Generated(subElement),
+                                   returnShape)
+
+    for indexedNameStr, subElement in baseShape.getShapeMap().items():
+        indexedName = IndexedName.fromString(indexedNameStr)
+        indexedName.parentIdentifier = baseShape.tag
+
+        modifiedShapes.extendList(indexedName,
+                                  maker.Modified(subElement),
+                                  returnShape)
+        
+    generatedShapes.updateReverseList()
+        
+    for sourceName, newShapes in modifiedShapes.historyList.items():
+        for i, newShapeIndexedName in enumerate(newShapes):
+            if returnShape.elementMap.hasIndexedName(newShapeIndexedName): continue
+
+            newMappedName = baseShape.elementMap.getMappedName(sourceName).copy()
+            
+            newMappedName.mappedSections.append(MappedSection(opCode = OpCode.THICKNESS,
+                                                              historyModifier = HistoryModifier.ITERATION,
+                                                              mapModifier = MapModifier.REMAP,
+                                                              iterationTag = returnShape.tag,
+                                                              elementType = newShapeIndexedName.elementType,
+                                                              index = i,
+                                                              totalNumberOfSectionElements = len(newShapes),
+                                                              ancestors = [])
+            )
+
+            returnShape.elementMap.setElement(newShapeIndexedName, newMappedName)
+    
+    for newShapeIndexedName, sourceShapeNames in generatedShapes.reverseHistoryList.items():
+        mappedNames = []
+        if returnShape.elementMap.hasIndexedName(newShapeIndexedName): continue
+
+        for indexedName in sourceShapeNames:
+            mappedNames.append(baseShape.elementMap.getMappedName(indexedName))
+
+        if len(mappedNames) > 0:
+            returnShape.elementMap.setElement(newShapeIndexedName, MappedName([MappedSection(opCode = OpCode.THICKNESS,
+                                                                               historyModifier = HistoryModifier.NEW,
+                                                                               mapModifier = MapModifier.MERGE,
+                                                                               iterationTag = returnShape.tag,
+                                                                               linkedNames = mappedNames,
+                                                                               elementType = newShapeIndexedName.elementType)]
+                )
+            )
+    
+    unmappedEdges = []
+
+    for name, _ in returnShape.getShapeMap().items():
+        nameFormatted = IndexedName.fromString(name)
+
+        if not returnShape.elementMap.hasIndexedName(nameFormatted):
+            unmappedEdges.append(nameFormatted)
+
+    for edge in unmappedEdges:
+        edgeShape = returnShape.shapeMap[edge.toString()]
+        faceAncestors = returnShape.getAncestorsOfType(edgeShape, "Face")
+        linkedNames = []
+
+        for face in faceAncestors:
+            faceIndexedName = returnShape.getIndexedNameOfShape(face)
+
+            if returnShape.elementMap.hasIndexedName(faceIndexedName):
+                faceMappedName = returnShape.elementMap.getMappedName(faceIndexedName)
+
+                if faceMappedName not in linkedNames:
+                    linkedNames.append(faceMappedName)
+        
+        if len(linkedNames) > 0:
+            returnShape.elementMap.setElement(edge, MappedName([MappedSection(opCode = OpCode.THICKNESS,
+                                                                              historyModifier = HistoryModifier.NEW,
+                                                                              mapModifier = MapModifier.MERGE,
+                                                                              iterationTag = returnShape.tag,
+                                                                              linkedNames = linkedNames,
+                                                                              elementType = newShapeIndexedName.elementType).copy()]
+                )
+            )
+    
+    print(f"generated map: {generatedShapes.historyList}")
     print(f"modified map: {modifiedShapes.historyList}")
 
     return returnShape
