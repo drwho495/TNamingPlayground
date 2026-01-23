@@ -3,7 +3,7 @@ import os
 
 sys.path.append(os.path.dirname(__file__))
 
-import Geometry.GeometryUtils as GeometryUtils
+import Geometry.GeometryManager as GeometryManager
 import Geometry.MappingUtils as MappingUtils
 from Geometry.TShape import TShape
 from Data.IndexedName import IndexedName

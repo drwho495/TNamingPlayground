@@ -3,12 +3,12 @@ import FreeCAD
 import FreeCADGui
 import Part
 from PySide import QtGui
-from Features import TExtrusion
+from Features import Extrusion
 
 class CreateTExtrusion:
     def GetResources(self):
         return {
-            'Pixmap': os.path.join(os.path.dirname(__file__), "..", "icons", "Extrusion.svg"),
+            'Pixmap': os.path.join(os.path.dirname(__file__), "..", "Icons", "Extrusion.png"),
             'MenuText': "Create TExtrusion Feature",
             'ToolTip': "Creates a new TExtrusion feature"
         }
@@ -20,7 +20,7 @@ class CreateTExtrusion:
         
         # Only works if the gui is up
         if FreeCAD.GuiUp == True:
-            TExtrusion.makeExtrusion()
+            Extrusion.makeExtrusion()
             
         doc.recompute()
         

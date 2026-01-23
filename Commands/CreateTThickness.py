@@ -3,7 +3,7 @@ import FreeCAD
 import FreeCADGui
 import Part
 from PySide import QtGui
-from Features import TThickness
+from Features import Thickness
 
 class CreateTThickness:
     def GetResources(self):
@@ -15,7 +15,7 @@ class CreateTThickness:
         
     def Activated(self):
         if FreeCAD.GuiUp == True:
-            TThickness.makeThickness()
+            Thickness.makeThickness()
             
     def IsActive(self):
         return FreeCAD.ActiveDocument != None

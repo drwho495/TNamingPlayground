@@ -3,7 +3,7 @@ import os
 
 sys.path.append(os.path.dirname(__file__))
 
-import Geometry.GeometryUtils as GeometryUtils
+import Geometry.GeometryManager as GeometryManager
 import Geometry.MappingUtils as MappingUtils
 import Features.FeatureUtils as FeatureUtils
 from Geometry.TShape import TShape
@@ -15,7 +15,7 @@ import FreeCADGui as Gui
 import FreeCAD as App
 import json
 
-class TThickness:
+class TDressup:
     def __init__(self, obj):
         obj.Proxy = self
         self.updateProps(obj)
@@ -29,10 +29,10 @@ class TThickness:
             obj.addProperty("App::PropertyPythonObject", "TShape")
             obj.TShape = TShape()
 
-        if not hasattr(obj, "Offset"):
-            obj.addProperty("App::PropertyDistance", "Offset")
-            obj.Offset = 1
-
+        if not hasattr(obj, "Radius"):
+            obj.addProperty("App::PropertyLength", "Radius")
+            obj.Radius = 1
+        
         if not hasattr(obj, "LastShapeIteration"):
             obj.addProperty("App::PropertyPythonObject", "LastShapeIteration")
             obj.LastShapeIteration = TShape()
@@ -41,8 +41,12 @@ class TThickness:
             obj.addProperty("App::PropertyString", "TNamingType")
             obj.TNamingType = "TDressup"
         
-        if not hasattr(obj, "Faces"):
-            obj.addProperty("App::PropertyStringList", "Faces")
+        if not hasattr(obj, "DressupType"):
+            obj.addProperty("App::PropertyEnumeration", "DressupType")
+            obj.DressupType = ["Fillet", "Chamfer"]
+        
+        if not hasattr(obj, "Elements"):
+            obj.addProperty("App::PropertyStringList", "Elements")
 
         if not hasattr(obj, "Refine"):
             obj.addProperty("App::PropertyBool", "Refine")
@@ -63,7 +67,7 @@ class TThickness:
 
         obj.LastShapeIteration = obj.TShape.copy()
 
-        if len(obj.Faces) != 0:
+        if len(obj.Elements) != 0:
             features, index = FeatureUtils.getFeaturesAndIndex(obj)
 
             if index != 0:
@@ -72,7 +76,7 @@ class TThickness:
                 indexedElements = []
                 mappedNames = []
 
-                for element in obj.Faces:
+                for element in obj.Elements:
                     mappedName = MappedName.fromDictionary(json.loads(element))
                     foundNames = MappingUtils.searchForSimilarNames(mappedName, lastFeature.TShape, lastFeature.LastShapeIteration)
 
@@ -81,18 +85,21 @@ class TThickness:
                             mappedNames.append(json.dumps(foundName[0].toDictionary()))
                             indexedElements.append(foundName[1])
             
-                mappedResult = GeometryUtils.makeMappedThickness(lastFeature.TShape, indexedElements, obj.Offset.Value, obj.ID)
+                mappedResult = GeometryManager.makeMappedDressup(lastFeature.TShape,
+                                                               DressupType.FILLET if obj.DressupType == "Fillet" else DressupType.CHAMFER,
+                                                               indexedElements,
+                                                               radius = obj.Radius.Value,
+                                                               tag = obj.ID)
 
                 if obj.Refine:
-                    pass
-                    # mappedResult = GeometryUtils.makeMappedRefineOperation(mappedResult, lastFeature.ID, mappedResult.tag)
+                    mappedResult = GeometryManager.makeMappedRefineOperation(mappedResult, lastFeature.ID, mappedResult.tag)
                 
                 obj.TShape = mappedResult
                 obj.Shape = mappedResult.getShape()
-                obj.Faces = mappedNames
+                obj.Elements = mappedNames
                 obj.TElementMap = json.dumps(mappedResult.elementMap.toDictionary())
 
-                GeometryUtils.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)
+                GeometryManager.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)
 
     def __setstate__(self, state):
         return None
@@ -103,7 +110,7 @@ class TThickness:
     def loads(self, state):
         return None
 
-class TThicknessViewObject:
+class TDressupViewObject:
     def __init__(self, obj):
         obj.ViewObject.Proxy = self
         self.updateProps(obj.ViewObject)
@@ -123,7 +130,12 @@ class TThicknessViewObject:
         return False
 
     def getIcon(self):
-        return os.path.join(os.path.dirname(__file__), "..", "icons", "Extrusion.svg")
+        if hasattr(self.Object.Object, "DressupType"):
+            if self.Object.Object.DressupType == "Fillet":
+                return os.path.join(os.path.dirname(__file__), "..", "Icons", "Fillet.png")
+            elif self.Object.Object.DressupType == "Chamfer":
+                return os.path.join(os.path.dirname(__file__), "..", "Icons", "Chamfer.png")
+        return ""
     
     def __getstate__(self):
         return None
@@ -137,18 +149,19 @@ class TThicknessViewObject:
     def loads(self, state):
         return None
     
-def makeThickness():
+def makeDressup(dressupType = DressupType.FILLET):
     selection = Gui.Selection.getCompleteSelection()
+    dressupTypeName = "Fillet" if dressupType == DressupType.FILLET else "Chamfer";
 
     if len(selection) > 0:
         featureObj = selection[0].Object
 
         if FeatureUtils.isTNamingFeature(featureObj):
             lastFeature = FeatureUtils.getFeaturesAndIndex(featureObj)[0][-1]
-            obj = App.ActiveDocument.addObject("Part::FeaturePython", "Thickness")
+            obj = App.ActiveDocument.addObject("Part::FeaturePython", dressupTypeName)
 
-            TThickness(obj)
-            TThicknessViewObject(obj)
+            TDressup(obj)
+            TDressupViewObject(obj)
 
             parent = lastFeature.getParent()
 
@@ -166,7 +179,8 @@ def makeThickness():
                                 
                         elements.append(json.dumps(elementMap.getMappedName(indexedName).toDictionary()))
             
-            obj.Faces = elements
+            obj.Elements = elements
+            obj.DressupType = dressupTypeName
             obj.recompute()
 
             Gui.Selection.clearSelection()

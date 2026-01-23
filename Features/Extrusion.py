@@ -3,7 +3,7 @@ import os
 
 sys.path.append(os.path.dirname(__file__))
 
-import Geometry.GeometryUtils as GeometryUtils
+import Geometry.GeometryManager as GeometryManager
 import Features.FeatureUtils as FeatureUtils
 from Geometry.TShape import TShape
 from Data.ElementMap import ElementMap
@@ -65,7 +65,7 @@ class TExtrusion:
         if obj.Support != None:
             features, index = FeatureUtils.getFeaturesAndIndex(obj)
 
-            sketchShape = GeometryUtils.getFaceOfSketch(obj.Support)
+            sketchShape = GeometryManager.getFaceOfSketch(obj.Support)
             normal = obj.Support.Placement.Rotation.multVec(App.Vector(0, 0, 1))
             extrusionDirection = normal.multiply(obj.Length.Value)
             tag = obj.ID
@@ -73,7 +73,7 @@ class TExtrusion:
             if index > 0 and obj.BooleanOperationType != "None":
                 tag = -tag
 
-            mappedExtrusion = GeometryUtils.makeMappedExtrusion(sketchShape, extrusionDirection, tag)[0]
+            mappedExtrusion = GeometryManager.makeMappedExtrusion(sketchShape, extrusionDirection, tag)[0]
 
             obj.LastShapeIteration = obj.TShape.copy()           
 
@@ -90,12 +90,12 @@ class TExtrusion:
                     booleanType = BooleanType.INTERSECTION
 
                 if booleanType != None:
-                    mappedResult = GeometryUtils.makeMappedBooleanOperation(lastFeatureTShape, mappedExtrusion, booleanType, obj.ID)[0]
+                    mappedResult = GeometryManager.makeMappedBooleanOperation(lastFeatureTShape, mappedExtrusion, booleanType, obj.ID)[0]
 
                     if obj.Refine:
-                        mappedResult = GeometryUtils.makeMappedRefineOperation(mappedResult, abs(lastFeatureTShape.tag), obj.ID)
+                        mappedResult = GeometryManager.makeMappedRefineOperation(mappedResult, abs(lastFeatureTShape.tag), obj.ID)
                 elif obj.BooleanOperationType == "Compound":
-                    mappedResult = GeometryUtils.makeMappedCompound([lastFeatureTShape, mappedExtrusion], obj.ID)
+                    mappedResult = GeometryManager.makeMappedCompound([lastFeatureTShape, mappedExtrusion], obj.ID)
 
                 obj.TShape = mappedResult
                 obj.Shape = mappedResult.getShape()
@@ -105,7 +105,7 @@ class TExtrusion:
                 obj.Shape = mappedExtrusion.getShape()
                 obj.TElementMap = json.dumps(mappedExtrusion.elementMap.toDictionary())
             
-            GeometryUtils.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)
+            GeometryManager.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)
 
             
     def __setstate__(self, state):
@@ -139,7 +139,7 @@ class TExtrusionViewObject:
         return False
 
     def getIcon(self):
-        return os.path.join(os.path.dirname(__file__), "..", "icons", "Extrusion.svg")
+        return os.path.join(os.path.dirname(__file__), "..", "Icons", "Extrusion.png")
     
     def __getstate__(self):
         return None
