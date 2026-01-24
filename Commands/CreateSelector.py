@@ -3,7 +3,7 @@ import FreeCAD
 import FreeCADGui
 import Part
 from PySide import QtGui
-from Features import Selector
+from Objects import Selector
 
 class CreateSelector:
     def GetResources(self):

@@ -10,7 +10,6 @@ from Data.DataEnums import *
 class MappedSection:
     def __init__(self,
                  opCode = OpCode.EXTRUSION,
-                 historyModifier = HistoryModifier.NEW,
                  mapModifier = MapModifier.REMAP,
                  iterationTag = 0,
                  linkedNames = [],
@@ -24,7 +23,6 @@ class MappedSection:
 
     ):
         self.opCode = opCode
-        self.historyModifier = historyModifier
         self.mapModifier = mapModifier
         self.iterationTag = iterationTag
         self.linkedNames = linkedNames
@@ -45,7 +43,6 @@ class MappedSection:
     def toDictionary(self):
         returnDict = {"ElementType": self.elementType,
                       "OpCode": self.opCode.value,
-                      "HistoryModifier": self.historyModifier.value,
                       "MapModifier": self.mapModifier.value,
                       "IterationTag": self.iterationTag,
                       "ReferenceIDs": self.referenceIDs,
@@ -74,7 +71,6 @@ class MappedSection:
         if isinstance(value, MappedSection):
             check = (self.opCode == value.opCode
                      and self.referenceIDs == value.referenceIDs
-                     and self.historyModifier == value.historyModifier
                      and self.mapModifier == value.mapModifier
                      and self.iterationTag == value.iterationTag
                      and self.elementType == value.elementType
@@ -96,7 +92,6 @@ class MappedSection:
 
         newMappedSection = MappedSection(elementType = dictionary["ElementType"],
                                          opCode = OpCode(dictionary["OpCode"]),
-                                         historyModifier = HistoryModifier(dictionary["HistoryModifier"]),
                                          mapModifier = MapModifier(dictionary["MapModifier"]),
                                          iterationTag = dictionary["IterationTag"],
                                          referenceIDs = dictionary["ReferenceIDs"],
@@ -105,16 +100,16 @@ class MappedSection:
                                          index = dictionary["Index"]).copy()
         
         for linkedName in dictionary["LinkedNames"]:
-            newMappedSection.linkedNames.append(MappedName.fromDictionary(linkedName))
+            newMappedSection.linkedNames.append(MappedName.fromDictionary(linkedName, False))
 
         if "DeletedNames" in dictionary:
             for deletedName in dictionary["DeletedNames"]:
-                newMappedSection.deletedNames.append(MappedName.fromDictionary(deletedName))
+                newMappedSection.deletedNames.append(MappedName.fromDictionary(deletedName, False))
         elif "AlternativeNames" in dictionary:
             for alternativeName in dictionary["AlternativeNames"]:
-                newMappedSection.deletedNames.append(MappedName.fromDictionary(alternativeName))
+                newMappedSection.deletedNames.append(MappedName.fromDictionary(alternativeName, False))
         
         for ancestorName in dictionary["Ancestors"]:
-            newMappedSection.ancestors.append(MappedName.fromDictionary(ancestorName))
+            newMappedSection.ancestors.append(MappedName.fromDictionary(ancestorName, False))
 
         return newMappedSection

@@ -1,5 +1,6 @@
 import json
 import copy
+import time
 from Data.MappedSection import MappedSection
 
 class MappedName:
@@ -18,13 +19,15 @@ class MappedName:
         return copy.deepcopy(self)
     
     @staticmethod
-    def fromDictionary(dictionary):
+    def fromDictionary(dictionary, baseLevel = True):
         mappedSections = []
 
         for section in dictionary["Sections"]:
             mappedSections.append(MappedSection.fromDictionary(section))
         
-        return MappedName(mappedSections)
+        newName = MappedName(mappedSections)
+
+        return newName
     
     # needed so that a MappedName can be a key in a dictionary.
     def __hash__(self):
@@ -35,11 +38,17 @@ class MappedName:
             return self.equal(value)
         return False
     
-    def masterIDs(self):
+    def masterIDs(self, includeLinkedNames = False):
+        ids = []
+
         if len(self.mappedSections) != 0:
-            return self.mappedSections[0].referenceIDs
+            ids.extend(self.mappedSections[0].referenceIDs)
         
-        return ""
+            if includeLinkedNames:
+                for linkedName in self.mappedSections[0].linkedNames:
+                    ids.extend(linkedName.masterIDs())
+        
+        return ids
     
     def getIterationTags(self):
         tags = []

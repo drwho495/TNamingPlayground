@@ -3,14 +3,14 @@ import FreeCAD
 import FreeCADGui
 import Part
 from PySide import QtGui
-from Features import Thickness
+from Objects import Thickness
 
-class CreateTThickness:
+class CreateThickness:
     def GetResources(self):
         return {
-            'Pixmap': os.path.join(os.path.dirname(__file__), "..", "icons", "Extrusion.svg"),
-            'MenuText': "Create TThickness Feature",
-            'ToolTip': "Creates a new TThickness feature"
+            'Pixmap': os.path.join(os.path.dirname(__file__), "..", "Icons", "Thickness.png"),
+            'MenuText': "Create Thickness Feature",
+            'ToolTip': "Creates a new Thickness feature"
         }
         
     def Activated(self):
@@ -20,4 +20,4 @@ class CreateTThickness:
     def IsActive(self):
         return FreeCAD.ActiveDocument != None
 
-FreeCADGui.addCommand('CreateTThickness', CreateTThickness())
+FreeCADGui.addCommand('CreateThickness', CreateThickness())

@@ -176,3 +176,18 @@ class TShape:
 
         if isinstance(name, IndexedName):
             return self.shapeMap[name.toString()]
+    
+    def __str__(self):
+        return ""
+    
+    def __setstate__(self, state):
+        return None
+
+    def __getstate__(self, state):
+        return None
+    
+    def dumps(self):
+        return None
+    
+    def loads(self, state):
+        return None

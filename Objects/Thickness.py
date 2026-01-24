@@ -3,9 +3,10 @@ import os
 
 sys.path.append(os.path.dirname(__file__))
 
+from Objects.StableDesignObject import SDObject
 import Geometry.GeometryManager as GeometryManager
 import Geometry.MappingUtils as MappingUtils
-import Features.FeatureUtils as FeatureUtils
+import Objects.ObjectUtils as ObjectUtils
 from Geometry.TShape import TShape
 from Data.ElementMap import ElementMap
 from Data.MappedName import MappedName
@@ -15,56 +16,43 @@ import FreeCADGui as Gui
 import FreeCAD as App
 import json
 
-class TThickness:
+class Thickness(SDObject):
     def __init__(self, obj):
+        super().__init__()
+
         obj.Proxy = self
         self.updateProps(obj)
     
     def updateProps(self, obj):
-        if not hasattr(obj, "TElementMap"):
-            obj.addProperty("App::PropertyString", "TElementMap")
-            obj.TElementMap = "{}"
+        super().updateProps(obj,
+                            implementAliasMap = True, 
+                            implementShapePair = True,
+                            implementBoolOpType = False,
+                            implementRefine = True,
+                            isFeatureOperation = True,
+                            typeName = "Thickness")
         
-        if not hasattr(obj, "TShape"):
-            obj.addProperty("App::PropertyPythonObject", "TShape")
-            obj.TShape = TShape()
-
         if not hasattr(obj, "Offset"):
             obj.addProperty("App::PropertyDistance", "Offset")
             obj.Offset = 1
 
-        if not hasattr(obj, "LastShapeIteration"):
-            obj.addProperty("App::PropertyPythonObject", "LastShapeIteration")
-            obj.LastShapeIteration = TShape()
-
-        if not hasattr(obj, "TNamingType"):
-            obj.addProperty("App::PropertyString", "TNamingType")
-            obj.TNamingType = "TDressup"
-        
         if not hasattr(obj, "Faces"):
             obj.addProperty("App::PropertyStringList", "Faces")
 
-        if not hasattr(obj, "Refine"):
-            obj.addProperty("App::PropertyBool", "Refine")
-            obj.Refine = True
-    
     def attach(self, obj):
         self.updateProps(obj)
-
-        elementMap = ElementMap.fromDictionary(json.loads(obj.TElementMap))
-        obj.TShape = TShape(obj.Shape, elementMap)
-        obj.TShape.buildCache()
+        super().attach(obj)
 
     def onDocumentRestored(self, obj):
         self.attach(obj)
 
-    def execute(self, obj):
+    def computeShape(self, obj):
         self.updateProps(obj)
 
         obj.LastShapeIteration = obj.TShape.copy()
 
         if len(obj.Faces) != 0:
-            features, index = FeatureUtils.getFeaturesAndIndex(obj)
+            features, index = ObjectUtils.getFeaturesAndIndex(ObjectUtils.getParentBody(obj), obj)
 
             if index != 0:
                 lastFeature = features[index - 1]
@@ -84,26 +72,19 @@ class TThickness:
                 mappedResult = GeometryManager.makeMappedThickness(lastFeature.TShape, indexedElements, obj.Offset.Value, obj.ID)
 
                 if obj.Refine:
-                    pass
-                    # mappedResult = GeometryManager.makeMappedRefineOperation(mappedResult, lastFeature.ID, mappedResult.tag)
+                    mappedResult = GeometryManager.makeMappedRefineOperation(mappedResult, lastFeature.ID, mappedResult.tag)
                 
                 obj.TShape = mappedResult
                 obj.Shape = mappedResult.getShape()
                 obj.Faces = mappedNames
-                obj.TElementMap = json.dumps(mappedResult.elementMap.toDictionary())
+                
+                self.aliasMap = ObjectUtils.updateAliasMap(self.aliasMap, mappedResult)
+                obj.AliasMap = ObjectUtils.convertAliasMapToString(self.aliasMap)
 
+                ObjectUtils.updateShapeMap(self.aliasMap, obj)
                 GeometryManager.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)
 
-    def __setstate__(self, state):
-        return None
-    
-    def dumps(self):
-        return None
-    
-    def loads(self, state):
-        return None
-
-class TThicknessViewObject:
+class ThicknessViewObject:
     def __init__(self, obj):
         obj.ViewObject.Proxy = self
         self.updateProps(obj.ViewObject)
@@ -123,7 +104,7 @@ class TThicknessViewObject:
         return False
 
     def getIcon(self):
-        return os.path.join(os.path.dirname(__file__), "..", "icons", "Extrusion.svg")
+        return os.path.join(os.path.dirname(__file__), "..", "Icons", "Thickness.png")
     
     def __getstate__(self):
         return None
@@ -143,12 +124,12 @@ def makeThickness():
     if len(selection) > 0:
         featureObj = selection[0].Object
 
-        if FeatureUtils.isTNamingFeature(featureObj):
-            lastFeature = FeatureUtils.getFeaturesAndIndex(featureObj)[0][-1]
+        if ObjectUtils.isSDObject(featureObj):
+            lastFeature = ObjectUtils.getFeaturesAndIndex(ObjectUtils.getParentBody(featureObj), featureObj)[0][-1]
             obj = App.ActiveDocument.addObject("Part::FeaturePython", "Thickness")
 
-            TThickness(obj)
-            TThicknessViewObject(obj)
+            Thickness(obj)
+            ThicknessViewObject(obj)
 
             parent = lastFeature.getParent()
 
@@ -160,7 +141,7 @@ def makeThickness():
 
             for element in selection:
                 if element.HasSubObjects:
-                    if FeatureUtils.isTNamingFeature(element.Object):
+                    if ObjectUtils.isSDObject(element.Object):
                         elementMap = element.Object.TShape.elementMap
                         indexedName = IndexedName.fromString(element.SubElementNames[0])
                                 
@@ -172,5 +153,5 @@ def makeThickness():
             Gui.Selection.clearSelection()
             Gui.Selection.addSelection(obj.Document.Name, obj.Name)
 
-            FeatureUtils.showFeature(obj)
+            parent.Proxy.showFeature(parent, obj)
             obj.purgeTouched()

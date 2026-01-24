@@ -3,7 +3,7 @@ import os
 
 sys.path.append(os.path.dirname(__file__))
 
-import Features.FeatureUtils as FeatureUtils
+import Objects.ObjectUtils as ObjectUtils
 from Data.MappedName import MappedName
 from Data.IndexedName import IndexedName
 import FreeCAD as App
@@ -38,7 +38,7 @@ class SelectRootFeature:
                         if obj.ID == abs(mappedName.mappedSections[0].iterationTag):
                             Gui.Selection.clearSelection()
 
-                            features, index = FeatureUtils.getFeaturesAndIndex(obj)
+                            features, index = ObjectUtils.getFeaturesAndIndex(ObjectUtils.getParentBody(obj), obj)
 
                             for i, feature in enumerate(features):
                                 if i == index:

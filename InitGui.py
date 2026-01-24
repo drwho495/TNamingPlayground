@@ -3,8 +3,9 @@ import sys
 import locater
 import FreeCADGui as Gui
 import FreeCAD as App
-from Commands.CreateTThickness import CreateTThickness
-from Commands.CreateTExtrusion import CreateTExtrusion
+from Commands.CreateDesignBody import CreateDesignBody
+from Commands.CreateThickness import CreateThickness
+from Commands.CreateExtrusion import CreateExtrusion
 from Commands.CreateFillet import CreateFillet
 from Commands.CreateChamfer import CreateChamfer
 from Commands.CreateSelector import CreateSelector
@@ -17,11 +18,9 @@ __dirname__ = os.path.dirname(locater.__file__)
 class ToponamingBench(Gui.Workbench):
     global __dirname__
 
-    MenuText = App.Qt.translate("Workbench", "Toponaming Test Bench")
-    ToolTip = App.Qt.translate("Workbench", "Toponaming Test Bench")
+    MenuText = App.Qt.translate("Workbench", "Stable Design")
+    ToolTip = App.Qt.translate("Workbench", "Stable Design")
 
-    commands = [
-    ]
     def __init__(self):
         self.documentObserver = None
 
@@ -29,22 +28,31 @@ class ToponamingBench(Gui.Workbench):
         return "Gui::PythonWorkbench"
 
     def Initialize(self):
-        """
-        Initialize the workbench commands
-        """
-        # List the commands to be added to the workbench
+        bodyCommands = [
+            "CreateDesignBody"
+        ]
+
         featureCommands = [
-            "CreateTExtrusion",
+            "CreateExtrusion",
+            "CreateFillet",
+            "CreateChamfer",
+            "CreateThickness"
+        ]
+
+        debugTools = [
             "DisplayElementHistory",
             "CreateSelector",
             "SelectRootFeature",
-            "CreateFillet",
-            "CreateChamfer",
-            "CreateTThickness"
         ]
         
-        self.appendToolbar("TNaming Features", featureCommands)
-        self.appendMenu("TNaming Features", featureCommands)
+        self.appendToolbar("SD Design Body", bodyCommands)
+        self.appendMenu("SD Design Body", bodyCommands)
+
+        self.appendToolbar("SD Feature Operations", featureCommands)
+        self.appendMenu("SD Feature Operations", featureCommands)
+
+        self.appendToolbar("SD Debug Tools", debugTools)
+        self.appendMenu("SD Debug Tools", debugTools)
 
     def Activated(self):
         pass

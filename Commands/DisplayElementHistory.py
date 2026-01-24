@@ -17,7 +17,7 @@ from PySide.QtWidgets import (
 )
 from PySide.QtCore import Qt
 
-WINDOW_TITLE = "TNaming History Viewer"
+WINDOW_TITLE = "Stable Design History Debugger"
 
 class HistoryViewerWidget(QTreeWidget):
     def __init__(self, parent=None):
@@ -35,7 +35,6 @@ class HistoryViewerWidget(QTreeWidget):
             sectionDict = section.toDictionary()
 
             self.addTopLevelItem(self._createItem("Operation Code", section.opCode.name))
-            self.addTopLevelItem(self._createItem("History Modifier", section.historyModifier.name))
             self.addTopLevelItem(self._createItem("Map Modifier", section.mapModifier.name))
             self.addTopLevelItem(self._createItem("Iteration Tag", section.iterationTag))
             self.addTopLevelItem(self._createItem("Linked Names", sectionDict["LinkedNames"]))

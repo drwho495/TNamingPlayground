@@ -16,10 +16,6 @@ class MapModifier(Enum):
     SOURCE = 5
     EXTRUDED = 6
 
-class HistoryModifier(Enum):
-    NEW = 1
-    ITERATION = 2
-
 class BooleanType(Enum):
     FUSE = 1
     CUT = 2

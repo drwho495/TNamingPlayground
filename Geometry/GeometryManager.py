@@ -99,7 +99,6 @@ def makeMappedRefineOperation(shape: TShape, baseShapeTag: int, tag: int = 0):
     modifiedShapes.updateReverseList()
     
     mapSubElement(returnShape, shape, appendedSection = MappedSection(opCode = OpCode.REFINE,
-                                                                      historyModifier = HistoryModifier.ITERATION,
                                                                       mapModifier = MapModifier.REMAP,
                                                                       iterationTag = returnShape.tag
                                                                       )
@@ -131,26 +130,162 @@ def makeMappedRefineOperation(shape: TShape, baseShapeTag: int, tag: int = 0):
         otherMappedNames.remove(newMappedName)
         
         newSection = MappedSection(opCode = OpCode.REFINE,
-                                   historyModifier = HistoryModifier.ITERATION,
                                    mapModifier = MapModifier.REMAP,
                                    iterationTag = returnShape.tag,
                                    elementType = newIndexedName.elementType,
                                    ancestors = [],
                                    deletedNames = []).copy()
         
-        if newIndexedName.toString() == "Face4":
-            print(f"other mapped name len: {len(otherMappedNames)}, in: {newIndexedName.toString()}, source shapes len: {len(sourceShapes)}")
-
         for otherMappedName in otherMappedNames:
             newSection.deletedNames.append(otherMappedName.copy())
  
         newMappedName.mappedSections.append(newSection)
         returnShape.elementMap.setElement(newIndexedName, newMappedName.copy())
 
-    print(f"\n\ngenerated map: {generatedShapes.historyList}")
-    print(f"modified map: {modifiedShapes.historyList}")
-
     return returnShape
+
+def mapPrismLikeShape(supportTShape: TShape, prismLikeTShape: TShape, opCode: OpCode):
+    topVertexes = []
+
+    mapSubElement(prismLikeTShape, 
+                  supportTShape, 
+                  rebaseFromExistingSourceName = False,
+                  appendedSection = MappedSection(opCode = opCode,
+                                                  mapModifier = MapModifier.REMAP,
+                                                  iterationTag = prismLikeTShape.tag)
+    )
+
+    prismLikeTShape.buildShapeMap(False)
+
+    for mappedName, shape in prismLikeTShape.getIDShapeMap().items():
+        if len(mappedName.mappedSections) == 1 and len(mappedName.mappedSections[0].linkedNames):
+            linkedName = mappedName.mappedSections[0].linkedNames[0]
+
+            if shape.ShapeType() == TopAbs_EDGE:
+                faceAncestors = prismLikeTShape.getAncestorsOfType(shape, "Face")
+
+                for face in faceAncestors:
+                    faceIndexedName = prismLikeTShape.getIndexedNameOfShape(face)
+
+                    if not prismLikeTShape.elementMap.hasIndexedName(faceIndexedName):
+                        prismLikeTShape.elementMap.setElement(faceIndexedName, MappedName(
+                                [
+                                    MappedSection(opCode = opCode,
+                                                  mapModifier = MapModifier.EXTRUDED,
+                                                  iterationTag = supportTShape.tag,
+                                                  linkedNames = [linkedName.copy()],
+                                                  elementType = "Face"
+                                                )
+                                ]
+                            )
+                        )
+            elif shape.ShapeType() == TopAbs_VERTEX:
+                edgeAncestors = prismLikeTShape.getAncestorsOfType(shape, "Edge")
+
+                for edge in edgeAncestors:
+                    edgeIndexedName = prismLikeTShape.getIndexedNameOfShape(edge)
+
+                    if not prismLikeTShape.elementMap.hasIndexedName(edgeIndexedName):
+                        prismLikeTShape.elementMap.setElement(edgeIndexedName, MappedName(
+                                [
+                                    MappedSection(opCode = opCode,
+                                                  mapModifier = MapModifier.EXTRUDED,
+                                                  iterationTag = supportTShape.tag,
+                                                  linkedNames = [linkedName.copy()],
+                                                  elementType = "Edge"
+                                                )
+                                ]
+                            )
+                        )
+                    
+                    vertexes = prismLikeTShape.getSubElementsOfChild(edge, "Vertex")
+
+                    for vertex in vertexes:
+                        vertexIndexedName = prismLikeTShape.getIndexedNameOfShape(vertex)
+
+                        if not prismLikeTShape.elementMap.hasIndexedName(vertexIndexedName):
+                            prismLikeTShape.elementMap.setElement(vertexIndexedName, MappedName(
+                                    [
+                                        MappedSection(opCode = opCode,
+                                                      mapModifier = MapModifier.EXTRUDED,
+                                                      iterationTag = supportTShape.tag,
+                                                      linkedNames = [linkedName.copy()],
+                                                      elementType = "Vertex"
+                                                    )
+                                    ]
+                                )
+                            )
+                            topVertexes.append(vertexIndexedName)
+    topEdges = {}
+
+    for vertexIndexedName in topVertexes:
+        edgeAncestors = prismLikeTShape.getAncestorsOfType(prismLikeTShape.getElement(vertexIndexedName), "Edge")
+
+        for edge in edgeAncestors:
+            edgeIndexedName = prismLikeTShape.getIndexedNameOfShape(edge)
+
+            if not prismLikeTShape.elementMap.hasIndexedName(edgeIndexedName):
+                if edgeIndexedName not in topEdges:
+                    topEdges[edgeIndexedName] = []
+                
+                topEdges[edgeIndexedName].extend(prismLikeTShape.elementMap.getMappedName(vertexIndexedName).masterIDs(True))
+    
+    topFaces = {}
+
+    for edgeIndexedName, IDs in topEdges.items():
+        formattedIDs = []
+
+        for id in IDs:
+            if "v" not in id: continue
+
+            formattedIDs.append(f"{id.split('v')[0]}")
+        
+        modeID = mode(formattedIDs)
+        modeIDName = supportTShape.elementMap.getMappedNameFromReferenceIDs([modeID])
+
+        if modeIDName != None:
+            prismLikeTShape.elementMap.setElement(edgeIndexedName, MappedName(
+                    [
+                        MappedSection(opCode = opCode,
+                                      mapModifier = MapModifier.COPY,
+                                      iterationTag = supportTShape.tag,
+                                      linkedNames = [modeIDName.copy()],
+                                      elementType = "Edge"
+                                      )
+                    ]
+                )
+            )
+        else:
+            App.Console.PrintError(f"Cannot properly map this {opCode.name}, please report!")
+
+        faceAncestors = prismLikeTShape.getAncestorsOfType(prismLikeTShape.getElement(edgeIndexedName), "Face")
+
+        for face in faceAncestors:
+            faceIndexedName = prismLikeTShape.getIndexedNameOfShape(face)
+
+            if not prismLikeTShape.elementMap.hasIndexedName(faceIndexedName):
+                if faceIndexedName not in topFaces:
+                    topFaces[faceIndexedName] = []
+
+                if modeID not in topFaces[faceIndexedName]: topFaces[faceIndexedName].append(modeID)
+        
+    for topFaceIndexedName, ids in topFaces.items():
+        foundName = supportTShape.elementMap.getMappedNameFromReferenceIDs(ids)
+        
+        if foundName != None:
+            prismLikeTShape.elementMap.setElement(topFaceIndexedName, MappedName(
+                    [
+                        MappedSection(opCode = opCode,
+                                      mapModifier = MapModifier.COPY,
+                                      iterationTag = supportTShape.tag,
+                                      linkedNames = [foundName.copy()],
+                                      elementType = "Face"
+                                      )
+                    ]
+                )
+            )
+        else:
+            App.Console.PrintError(f"Cannot properly map this {opCode.name}, please report!")
 
 def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElements: List[IndexedName], radius: float = 1, tag: int = 0):
     baseShape.buildCache()
@@ -164,6 +299,9 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
     for element in dressupElements:
         if element.elementType == "Edge":
             maker.Add(radius, baseShape.getElement(element))
+        if element.elementType == "Face":
+            for edge in baseShape.getSubElementsOfChild(baseShape.getElement(element), "Edge"):
+                maker.Add(radius, edge)
     
     maker.Build()
 
@@ -172,7 +310,6 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
     returnShape.buildCache()
 
     mapSubElement(returnShape, baseShape, appendedSection = MappedSection(opCode = OpCode.DRESSUP,
-                                                                          historyModifier = HistoryModifier.ITERATION,
                                                                           mapModifier = MapModifier.REMAP,
                                                                           iterationTag = returnShape.tag
                                                                           )
@@ -204,7 +341,6 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
             newMappedName = baseShape.elementMap.getMappedName(sourceName).copy()
             
             newMappedName.mappedSections.append(MappedSection(opCode = OpCode.DRESSUP,
-                                                              historyModifier = HistoryModifier.ITERATION,
                                                               mapModifier = MapModifier.REMAP,
                                                               iterationTag = returnShape.tag,
                                                               elementType = newShapeIndexedName.elementType,
@@ -220,7 +356,6 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
             if returnShape.elementMap.hasIndexedName(newShapeIndexedName): continue
 
             newMappedName = MappedName([MappedSection(opCode = OpCode.DRESSUP,
-                                                      historyModifier = HistoryModifier.NEW,
                                                       mapModifier = MapModifier.REMAP,
                                                       iterationTag = returnShape.tag,
                                                       elementType = newShapeIndexedName.elementType,
@@ -239,7 +374,6 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
 
                 if not returnShape.elementMap.hasIndexedName(edgeIndexedName):
                     newEdgeMappedName = MappedName([MappedSection(opCode = OpCode.DRESSUP,
-                                                              historyModifier = HistoryModifier.NEW,
                                                               mapModifier = MapModifier.REMAP,
                                                               iterationTag = returnShape.tag,
                                                               elementType = "Edge",
@@ -257,7 +391,6 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
 
                         if not returnShape.elementMap.hasIndexedName(vertexIndexedName):
                             newVertexMappedName = MappedName([MappedSection(opCode = OpCode.DRESSUP,
-                                                                            historyModifier = HistoryModifier.NEW,
                                                                             mapModifier = MapModifier.REMAP,
                                                                             iterationTag = returnShape.tag,
                                                                             elementType = "Vertex",
@@ -273,9 +406,6 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
                     returnShape.elementMap.setElement(edgeIndexedName, newEdgeMappedName)
 
             returnShape.elementMap.setElement(newShapeIndexedName, newMappedName)
-    
-    print(f"\n\ngenerated map: {generatedShapes.historyList}")
-    print(f"modified map: {modifiedShapes.historyList}")
 
     return returnShape
 
@@ -293,7 +423,6 @@ def makeMappedCompound(compoundShapes: List[TShape], tag: int = 0):
 
     for shape in compoundShapes:
         mapSubElement(returnShape, shape, appendedSection = MappedSection(opCode = OpCode.COMPOUND,
-                                                                          historyModifier = HistoryModifier.ITERATION,
                                                                           mapModifier = MapModifier.REMAP,
                                                                           iterationTag = returnShape.tag,
                                                                           ancestors = [],
@@ -328,7 +457,6 @@ def makeMappedThickness(baseShape: TShape, faces: List[IndexedName], offset: int
     returnShape.buildCache()
 
     mapSubElement(returnShape, baseShape, appendedSection = MappedSection(opCode = OpCode.THICKNESS,
-                                                                          historyModifier = HistoryModifier.ITERATION,
                                                                           mapModifier = MapModifier.REMAP,
                                                                           iterationTag = returnShape.tag
                                                                           )
@@ -362,7 +490,6 @@ def makeMappedThickness(baseShape: TShape, faces: List[IndexedName], offset: int
             newMappedName = baseShape.elementMap.getMappedName(sourceName).copy()
             
             newMappedName.mappedSections.append(MappedSection(opCode = OpCode.THICKNESS,
-                                                              historyModifier = HistoryModifier.ITERATION,
                                                               mapModifier = MapModifier.REMAP,
                                                               iterationTag = returnShape.tag,
                                                               elementType = newShapeIndexedName.elementType,
@@ -382,7 +509,6 @@ def makeMappedThickness(baseShape: TShape, faces: List[IndexedName], offset: int
 
         if len(mappedNames) > 0:
             returnShape.elementMap.setElement(newShapeIndexedName, MappedName([MappedSection(opCode = OpCode.THICKNESS,
-                                                                               historyModifier = HistoryModifier.NEW,
                                                                                mapModifier = MapModifier.MERGE,
                                                                                iterationTag = returnShape.tag,
                                                                                linkedNames = mappedNames,
@@ -414,7 +540,6 @@ def makeMappedThickness(baseShape: TShape, faces: List[IndexedName], offset: int
         
         if len(linkedNames) > 0:
             returnShape.elementMap.setElement(edge, MappedName([MappedSection(opCode = OpCode.THICKNESS,
-                                                                              historyModifier = HistoryModifier.NEW,
                                                                               mapModifier = MapModifier.MERGE,
                                                                               iterationTag = returnShape.tag,
                                                                               linkedNames = linkedNames,
@@ -422,9 +547,6 @@ def makeMappedThickness(baseShape: TShape, faces: List[IndexedName], offset: int
                 )
             )
     
-    print(f"generated map: {generatedShapes.historyList}")
-    print(f"modified map: {modifiedShapes.historyList}")
-
     return returnShape
 
 def makeMappedExtrusion(supportTShape: TShape, direction: App.Vector, tag: int = 0):
@@ -437,151 +559,11 @@ def makeMappedExtrusion(supportTShape: TShape, direction: App.Vector, tag: int =
 
     extrusionTShape = TShape(sourceShape = maker.Shape(), elementMap = ElementMap())
     extrusionTShape.tag = tag
-
-    generatedMap = {}
-    modifiedMap = {}
-
     extrusionTShape.buildCache()
 
-    topVertexes = []
+    mapPrismLikeShape(supportTShape, extrusionTShape, OpCode.EXTRUSION)
 
-    mapSubElement(extrusionTShape, 
-                  supportTShape, 
-                  rebaseFromExistingSourceName = False,
-                  appendedSection = MappedSection(opCode = OpCode.EXTRUSION,
-                                                  historyModifier = HistoryModifier.NEW,
-                                                  mapModifier = MapModifier.REMAP,
-                                                  iterationTag = tag)
-    )
-
-    extrusionTShape.buildShapeMap(False)
-
-    for mappedName, shape in extrusionTShape.getIDShapeMap().items():
-        if len(mappedName.mappedSections) == 1:
-            if shape.ShapeType() == TopAbs_EDGE:
-                faceAncestors = extrusionTShape.getAncestorsOfType(shape, "Face")
-
-                for face in faceAncestors:
-                    faceIndexedName = extrusionTShape.getIndexedNameOfShape(face)
-
-                    if not extrusionTShape.elementMap.hasIndexedName(faceIndexedName):
-                        extrusionTShape.elementMap.setElement(faceIndexedName, MappedName(
-                                [
-                                    MappedSection(opCode = OpCode.EXTRUSION,
-                                                  historyModifier = HistoryModifier.NEW,
-                                                  mapModifier = MapModifier.EXTRUDED,
-                                                  iterationTag = supportTShape.tag,
-                                                  referenceIDs = mappedName.masterIDs(),
-                                                  elementType = "Face"
-                                                )
-                                ]
-                            )
-                        )
-            elif shape.ShapeType() == TopAbs_VERTEX:
-                edgeAncestors = extrusionTShape.getAncestorsOfType(shape, "Edge")
-
-                for edge in edgeAncestors:
-                    edgeIndexedName = extrusionTShape.getIndexedNameOfShape(edge)
-
-                    if not extrusionTShape.elementMap.hasIndexedName(edgeIndexedName):
-                        extrusionTShape.elementMap.setElement(edgeIndexedName, MappedName(
-                                [
-                                    MappedSection(opCode = OpCode.EXTRUSION,
-                                                  historyModifier = HistoryModifier.NEW,
-                                                  mapModifier = MapModifier.EXTRUDED,
-                                                  iterationTag = supportTShape.tag,
-                                                  referenceIDs = mappedName.masterIDs(),
-                                                  elementType = "Edge"
-                                                )
-                                ]
-                            )
-                        )
-                    
-                    vertexes = extrusionTShape.getSubElementsOfChild(edge, "Vertex")
-
-                    for vertex in vertexes:
-                        vertexIndexedName = extrusionTShape.getIndexedNameOfShape(vertex)
-
-                        if not extrusionTShape.elementMap.hasIndexedName(vertexIndexedName):
-                            extrusionTShape.elementMap.setElement(vertexIndexedName, MappedName(
-                                    [
-                                        MappedSection(opCode = OpCode.EXTRUSION,
-                                                      historyModifier = HistoryModifier.NEW,
-                                                      mapModifier = MapModifier.EXTRUDED,
-                                                      iterationTag = supportTShape.tag,
-                                                      referenceIDs = mappedName.masterIDs(),
-                                                      elementType = "Vertex"
-                                                    )
-                                    ]
-                                )
-                            )
-                            topVertexes.append(vertexIndexedName)
-
-    topEdges = {}
-
-    for vertexIndexedName in topVertexes:
-        edgeAncestors = extrusionTShape.getAncestorsOfType(extrusionTShape.getElement(vertexIndexedName), "Edge")
-
-        for edge in edgeAncestors:
-            edgeIndexedName = extrusionTShape.getIndexedNameOfShape(edge)
-
-            if not extrusionTShape.elementMap.hasIndexedName(edgeIndexedName):
-                if edgeIndexedName not in topEdges:
-                    topEdges[edgeIndexedName] = []
-                
-                topEdges[edgeIndexedName].extend(extrusionTShape.elementMap.getMappedName(vertexIndexedName).masterIDs())
-    
-    topFaces = {}
-
-    for edgeIndexedName, IDs in topEdges.items():
-        formattedIDs = []
-
-        for id in IDs:
-            if "v" not in id: continue
-
-            formattedIDs.append(f"{id.split('v')[0]};{id.split(';')[-1]}")
-        
-        modeID = mode(formattedIDs)
-
-        extrusionTShape.elementMap.setElement(edgeIndexedName, MappedName(
-                [
-                    MappedSection(opCode = OpCode.EXTRUSION,
-                                  historyModifier = HistoryModifier.NEW,
-                                  mapModifier = MapModifier.COPY,
-                                  iterationTag = supportTShape.tag,
-                                  referenceIDs = [modeID],
-                                  elementType = "Edge"
-                                )
-                ]
-            )
-        )
-
-        faceAncestors = extrusionTShape.getAncestorsOfType(extrusionTShape.getElement(edgeIndexedName), "Face")
-
-        for face in faceAncestors:
-            faceIndexedName = extrusionTShape.getIndexedNameOfShape(face)
-
-            if not extrusionTShape.elementMap.hasIndexedName(faceIndexedName):
-                if faceIndexedName not in topFaces:
-                    topFaces[faceIndexedName] = []
-
-                if modeID not in topFaces[faceIndexedName]: topFaces[faceIndexedName].append(modeID)
-        
-    for topFaceIndexedName, ids in topFaces.items():
-        extrusionTShape.elementMap.setElement(topFaceIndexedName, MappedName(
-                [
-                    MappedSection(opCode = OpCode.EXTRUSION,
-                                  historyModifier = HistoryModifier.NEW,
-                                  mapModifier = MapModifier.COPY,
-                                  iterationTag = supportTShape.tag,
-                                  referenceIDs = ids,
-                                  elementType = "Face"
-                                )
-                ]
-            )
-        )
-
-    return (extrusionTShape, maker, generatedMap, modifiedMap)
+    return extrusionTShape
 
 def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, booleanType: BooleanType, tag: int = 0):
     maker = None
@@ -600,14 +582,12 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
     returnShape.buildCache()
 
     mapSubElement(returnShape, operatorShape, appendedSection = MappedSection(opCode = OpCode.BOOLEAN,
-                                                                              historyModifier = HistoryModifier.ITERATION,
                                                                               mapModifier = MapModifier.REMAP,
                                                                               iterationTag = returnShape.tag
                                                                             )
     )
 
     mapSubElement(returnShape, baseShape, appendedSection = MappedSection(opCode = OpCode.BOOLEAN,
-                                                                          historyModifier = HistoryModifier.ITERATION,
                                                                           mapModifier = MapModifier.REMAP,
                                                                           iterationTag = returnShape.tag
                                                                         )
@@ -654,7 +634,6 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
                     ancestors.append(ancestorNameStr)
             
             newMappedName.mappedSections.append(MappedSection(opCode = OpCode.BOOLEAN,
-                                                              historyModifier = HistoryModifier.ITERATION,
                                                               mapModifier = MapModifier.REMAP,
                                                               iterationTag = returnShape.tag,
                                                               elementType = newShapeIndexedName.elementType,
@@ -684,8 +663,6 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
     #                 and len(vertexMappedName.mappedSections) != 0
     #                 and vertexMappedName.mappedSections[0] != tag)
     #             ):
-    #                 # print("add ancestor")
-
     #                 allowedVertexNames.append(vertexIndexedName)
     #                 name.mappedSections[-1].ancestors.append(vertexMappedName.copy())
             
@@ -705,16 +682,12 @@ def makeMappedBooleanOperation(baseShape: TShape, operatorShape: TShape, boolean
 
         if len(mappedNames) > 0:
             returnShape.elementMap.setElement(newShapeIndexedName, MappedName([MappedSection(opCode = OpCode.BOOLEAN,
-                                              historyModifier = HistoryModifier.NEW,
                                               mapModifier = MapModifier.MERGE,
                                               iterationTag = returnShape.tag,
                                               linkedNames = mappedNames,
                                               elementType = newShapeIndexedName.elementType)]
                 )
             )
-
-    print(f"generated map: {generatedShapes.historyList}")
-    print(f"modified map: {modifiedShapes.historyList}")
 
     return (returnShape, maker, generatedShapes, modifiedShapes)
 
@@ -767,7 +740,7 @@ def mapSubElement(baseShape: TShape, sourceShape: TShape, rebaseFromExistingSour
                         copiedAppendedSection.elementType = baseIndexedName.elementType
 
                         if not rebaseFromExistingSourceName:
-                            copiedAppendedSection.referenceIDs = sourceName.masterIDs()
+                            copiedAppendedSection.linkedNames = [sourceName.copy()]
 
                         newName.mappedSections.append(copiedAppendedSection)
 
@@ -811,10 +784,9 @@ def getFaceOfSketch(sketch):
                     if edge.Curve.isSame(geomShape.Curve, 1e-6, 1e-6):
                         elementMap.setElement(IndexedName.fromString(f"Edge{i + 1}"), MappedName(
                                 [MappedSection(opCode = OpCode.SKETCH,
-                                               historyModifier = HistoryModifier.NEW,
                                                mapModifier = MapModifier.SOURCE,
                                                iterationTag = sketch.ID,
-                                               referenceIDs = f"g{geoF.Id};{sketch.ID}",
+                                               referenceIDs = f"g{geoF.Id}",
                                                elementType = "Edge")]
                             )
                         )
@@ -828,23 +800,22 @@ def getFaceOfSketch(sketch):
                                         vertexesMap[vertexName] = []
                                     
                                     if vertex.Point.isEqual(geom.StartPoint, 1e-6):
-                                        vertexesMap[vertexName].append(f"g{geoF.Id}v1;{sketch.ID}")
+                                        vertexesMap[vertexName].append(f"g{geoF.Id}v1")
 
                                     if vertex.Point.isEqual(geom.EndPoint, 1e-6):
-                                        vertexesMap[vertexName].append(f"g{geoF.Id}v2;{sketch.ID}")
+                                        vertexesMap[vertexName].append(f"g{geoF.Id}v2")
                         elif len(edge.Vertexes) == 1:
                             vertexName = getNameOfElement(edge.Vertexes[0], supportFace)
                             
                             if vertexName != None:
                                 vertexesMap[vertexName] = []
 
-                            vertexesMap[vertexName].append(f"g{geoF.Id}v1;{sketch.ID}")
+                            vertexesMap[vertexName].append(f"g{geoF.Id}v1")
     
         for vertexName, IDs in vertexesMap.items():
             if len(IDs) != 0:
                 elementMap.setElement(IndexedName.fromString(vertexName), MappedName(
                         [MappedSection(opCode = OpCode.SKETCH,
-                                    historyModifier = HistoryModifier.NEW,
                                     mapModifier = MapModifier.SOURCE,
                                     iterationTag = sketch.ID,
                                     referenceIDs = IDs,
@@ -867,7 +838,6 @@ def getFaceOfSketch(sketch):
         for faceName, ids in facesMap.items():
             elementMap.setElement(IndexedName.fromString(faceName), MappedName(
                     [MappedSection(opCode = OpCode.SKETCH,
-                                historyModifier = HistoryModifier.NEW,
                                 mapModifier = MapModifier.SOURCE,
                                 iterationTag = sketch.ID,
                                 referenceIDs = ids,

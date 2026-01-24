@@ -3,7 +3,7 @@ import FreeCAD
 import FreeCADGui
 import Part
 from PySide import QtGui
-from Features import Dressup
+from Objects import Dressup
 
 class CreateChamfer:
     def GetResources(self):

@@ -3,9 +3,10 @@ import os
 
 sys.path.append(os.path.dirname(__file__))
 
+from Objects.StableDesignObject import SDObject
 import Geometry.GeometryManager as GeometryManager
 import Geometry.MappingUtils as MappingUtils
-import Features.FeatureUtils as FeatureUtils
+import Objects.ObjectUtils as ObjectUtils
 from Geometry.TShape import TShape
 from Data.ElementMap import ElementMap
 from Data.MappedName import MappedName
@@ -15,31 +16,25 @@ import FreeCADGui as Gui
 import FreeCAD as App
 import json
 
-class TDressup:
+class Dressup(SDObject):
     def __init__(self, obj):
+        super().__init__()
+
         obj.Proxy = self
         self.updateProps(obj)
     
     def updateProps(self, obj):
-        if not hasattr(obj, "TElementMap"):
-            obj.addProperty("App::PropertyString", "TElementMap")
-            obj.TElementMap = "{}"
-        
-        if not hasattr(obj, "TShape"):
-            obj.addProperty("App::PropertyPythonObject", "TShape")
-            obj.TShape = TShape()
+        super().updateProps(obj,
+                            implementAliasMap = True, 
+                            implementShapePair = True,
+                            implementBoolOpType = True,
+                            implementRefine = True,
+                            isFeatureOperation = True,
+                            typeName = "Dressup")
 
         if not hasattr(obj, "Radius"):
             obj.addProperty("App::PropertyLength", "Radius")
             obj.Radius = 1
-        
-        if not hasattr(obj, "LastShapeIteration"):
-            obj.addProperty("App::PropertyPythonObject", "LastShapeIteration")
-            obj.LastShapeIteration = TShape()
-
-        if not hasattr(obj, "TNamingType"):
-            obj.addProperty("App::PropertyString", "TNamingType")
-            obj.TNamingType = "TDressup"
         
         if not hasattr(obj, "DressupType"):
             obj.addProperty("App::PropertyEnumeration", "DressupType")
@@ -48,27 +43,20 @@ class TDressup:
         if not hasattr(obj, "Elements"):
             obj.addProperty("App::PropertyStringList", "Elements")
 
-        if not hasattr(obj, "Refine"):
-            obj.addProperty("App::PropertyBool", "Refine")
-            obj.Refine = True
-    
     def attach(self, obj):
         self.updateProps(obj)
-
-        elementMap = ElementMap.fromDictionary(json.loads(obj.TElementMap))
-        obj.TShape = TShape(obj.Shape, elementMap)
-        obj.TShape.buildCache()
+        super().attach(obj)
 
     def onDocumentRestored(self, obj):
         self.attach(obj)
 
-    def execute(self, obj):
+    def computeShape(self, obj):
         self.updateProps(obj)
 
         obj.LastShapeIteration = obj.TShape.copy()
 
         if len(obj.Elements) != 0:
-            features, index = FeatureUtils.getFeaturesAndIndex(obj)
+            features, index = ObjectUtils.getFeaturesAndIndex(ObjectUtils.getParentBody(obj), obj)
 
             if index != 0:
                 lastFeature = features[index - 1]
@@ -97,20 +85,14 @@ class TDressup:
                 obj.TShape = mappedResult
                 obj.Shape = mappedResult.getShape()
                 obj.Elements = mappedNames
-                obj.TElementMap = json.dumps(mappedResult.elementMap.toDictionary())
 
+                self.aliasMap = ObjectUtils.updateAliasMap(self.aliasMap, mappedResult)
+                obj.AliasMap = ObjectUtils.convertAliasMapToString(self.aliasMap)
+
+                ObjectUtils.updateShapeMap(self.aliasMap, obj)
                 GeometryManager.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)
 
-    def __setstate__(self, state):
-        return None
-    
-    def dumps(self):
-        return None
-    
-    def loads(self, state):
-        return None
-
-class TDressupViewObject:
+class DressupViewObject:
     def __init__(self, obj):
         obj.ViewObject.Proxy = self
         self.updateProps(obj.ViewObject)
@@ -156,14 +138,14 @@ def makeDressup(dressupType = DressupType.FILLET):
     if len(selection) > 0:
         featureObj = selection[0].Object
 
-        if FeatureUtils.isTNamingFeature(featureObj):
-            lastFeature = FeatureUtils.getFeaturesAndIndex(featureObj)[0][-1]
+        if ObjectUtils.isSDObject(featureObj):
+            lastFeature = ObjectUtils.getFeaturesAndIndex(ObjectUtils.getParentBody(featureObj), featureObj)[0][-1]
             obj = App.ActiveDocument.addObject("Part::FeaturePython", dressupTypeName)
 
-            TDressup(obj)
-            TDressupViewObject(obj)
+            Dressup(obj)
+            DressupViewObject(obj)
 
-            parent = lastFeature.getParent()
+            parent = ObjectUtils.getParentBody(lastFeature)
 
             group = parent.Group
             group.append(obj)
@@ -173,7 +155,7 @@ def makeDressup(dressupType = DressupType.FILLET):
 
             for element in selection:
                 if element.HasSubObjects:
-                    if FeatureUtils.isTNamingFeature(element.Object):
+                    if ObjectUtils.isSDObject(element.Object):
                         elementMap = element.Object.TShape.elementMap
                         indexedName = IndexedName.fromString(element.SubElementNames[0])
                                 
@@ -186,5 +168,5 @@ def makeDressup(dressupType = DressupType.FILLET):
             Gui.Selection.clearSelection()
             Gui.Selection.addSelection(obj.Document.Name, obj.Name)
 
-            FeatureUtils.showFeature(obj)
+            parent.Proxy.showFeature(parent, obj)
             obj.purgeTouched()

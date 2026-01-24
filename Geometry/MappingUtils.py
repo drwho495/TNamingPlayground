@@ -10,15 +10,6 @@ from Data.MappedSection import MappedSection
 from OCC.Core.TopAbs import TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX
 from Data.DataEnums import *
 
-def getNewHistoryCount(mappedName: MappedName):
-    count = 0
-
-    for section in mappedName.mappedSections:
-        if section.historyModifier == HistoryModifier.NEW:
-            count += 1
-    
-    return count
-
 def masterIDsCheck(name1: MappedName, name2: MappedName):
     return len(list(set(name1.masterIDs()) & set(name2.masterIDs()))) >= 2
 
@@ -32,10 +23,6 @@ def complexCompare(searchName, searchShape, oldShape, loopName, allowVaryingHist
     searchName = searchName.copy()
     loopName = loopName.copy()
 
-    if getNewHistoryCount(searchName) != getNewHistoryCount(loopName):
-        if loopName == debugCheckName: print("New history count failure.")
-        return False
-    
     if len(loopName.mappedSections) == 0:
         return False
     
@@ -72,6 +59,10 @@ def complexCompare(searchName, searchShape, oldShape, loopName, allowVaryingHist
             loopSection = loopName.mappedSections[i]
 
             if searchSection.iterationTag != loopSection.iterationTag:
+                if i == 0:
+                    # the first sections in names MUST be the same!
+                    return False
+
                 if searchSection.iterationTag in loopName.getIterationTags():
                     newMappedSections = loopName.copy().mappedSections
                     sectionI = i
@@ -102,7 +93,6 @@ def complexCompare(searchName, searchShape, oldShape, loopName, allowVaryingHist
                     searchSection = searchName.mappedSections[i]
 
             simpleSectionCheck =   (searchSection.opCode          == loopSection.opCode
-                                and searchSection.historyModifier == loopSection.historyModifier
                                 and searchSection.mapModifier     == loopSection.mapModifier
                                 and searchSection.elementType     == loopSection.elementType)
             
@@ -172,7 +162,7 @@ def complexCompare(searchName, searchShape, oldShape, loopName, allowVaryingHist
     else:
         return False
     
-def searchForSimilarNames(searchName, searchShape, oldShape, allowVaryingHistory = True, debugCheckName = None):
+def searchForSimilarNames(searchName, searchShape, oldShape = None, allowVaryingHistory = True, debugCheckName = None):
     foundNames = []
 
     for loopIndexedNameString, loopMappedName in searchShape.elementMap.internalMap.items():

@@ -3,6 +3,7 @@ import os
 
 sys.path.append(os.path.dirname(__file__))
 
+from Objects.StableDesignObject import SDObject
 import Geometry.GeometryManager as GeometryManager
 import Geometry.MappingUtils as MappingUtils
 from Geometry.TShape import TShape
@@ -15,8 +16,16 @@ import FreeCAD as App
 import Part
 import json
 
-class Selector:
+class Selector(SDObject):
     def updateProps(self, obj):
+        super().updateProps(obj,
+                            implementAliasMap = False, 
+                            implementShapePair = False,
+                            implementBoolOpType = False,
+                            implementRefine = False,
+                            isFeatureOperation = False,
+                            typeName = "Selector")
+        
         if not hasattr(obj, "LinkedMappedName"):
             obj.addProperty("App::PropertyString", "LinkedMappedName")
             obj.LinkedMappedName = "{}"
@@ -62,15 +71,6 @@ class Selector:
                 obj.ViewObject.DiffuseColor = (0.0, 0.0, 1.0)
                 
                 obj.Shape = Part.makeCompound(spheres)
-    
-    def __setstate__(self, state):
-        return None
-    
-    def dumps(self):
-        return None
-    
-    def loads(self, state):
-        return None
 
 class SelectionViewObject:
     def __init__(self, obj):

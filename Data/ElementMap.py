@@ -20,6 +20,13 @@ class ElementMap:
     def hasIndexedName(self, indexedName):
         return indexedName.toString() in self.internalMap
     
+    # this should ONLY be used as a utility for mapping shapes, 
+    # do not use this for searching for names!
+    def getMappedNameFromReferenceIDs(self, IDs):
+        for _, mappedName in self.internalMap.items():
+            if mappedName.masterIDs() == IDs or len(set(mappedName.masterIDs()) & set(IDs)) == len(IDs):
+                return mappedName
+    
     def getMappedName(self, indexedName):
         if indexedName.toString() not in self.internalMap:
             return MappedName()
@@ -44,6 +51,15 @@ class ElementMap:
         if isinstance(value, ElementMap):
             return value.internalMap == self.internalMap
     
+    @staticmethod
+    def fromAliasMap(aliasMap: dict):
+        newElementMap = ElementMap()
+
+        for _, namePair in aliasMap.items():
+            newElementMap.internalMap[namePair[1]] = MappedName.fromDictionary(namePair[0])
+
+        return newElementMap
+
     @staticmethod
     def fromDictionary(dictionary):
         newElementMap = ElementMap()

@@ -3,67 +3,55 @@ import os
 
 sys.path.append(os.path.dirname(__file__))
 
+from Objects.StableDesignObject import SDObject
+import Objects.ObjectUtils as ObjectUtils
 import Geometry.GeometryManager as GeometryManager
-import Features.FeatureUtils as FeatureUtils
 from Geometry.TShape import TShape
-from Data.ElementMap import ElementMap
 from Data.DataEnums import *
 import FreeCADGui as Gui
 import FreeCAD as App
 import json
 
-class TExtrusion:
+class Extrusion(SDObject):
     def __init__(self, obj):
+        super().__init__()
+
         obj.Proxy = self
         self.updateProps(obj)
     
     def updateProps(self, obj):
-        if not hasattr(obj, "TElementMap"):
-            obj.addProperty("App::PropertyString", "TElementMap")
-            obj.TElementMap = "{}"
-
+        super().updateProps(obj,
+                            implementAliasMap = True, 
+                            implementShapePair = True,
+                            implementBoolOpType = True,
+                            implementRefine = True,
+                            isFeatureOperation = True,
+                            typeName = "Extrusion")
+        
         if not hasattr(obj, "Length"):
             obj.addProperty("App::PropertyDistance", "Length")
             obj.Length = 10
         
         if not hasattr(obj, "Support"):
             obj.addProperty("App::PropertyLink", "Support")
-
-        if not hasattr(obj, "TShape"):
-            obj.addProperty("App::PropertyPythonObject", "TShape")
-            obj.TShape = TShape()
-        
-        if not hasattr(obj, "LastShapeIteration"):
-            obj.addProperty("App::PropertyPythonObject", "LastShapeIteration")
-            obj.LastShapeIteration = TShape()
-
-        if not hasattr(obj, "TNamingType"):
-            obj.addProperty("App::PropertyString", "TNamingType")
-            obj.TNamingType = "TExtrusion"
-
-        if not hasattr(obj, "BooleanOperationType"):
-            obj.addProperty("App::PropertyEnumeration", "BooleanOperationType")
-            obj.BooleanOperationType = ["Fuse", "Cut", "Intersection", "None", "Compound"]
         
         if not hasattr(obj, "Refine"):
             obj.addProperty("App::PropertyBool", "Refine")
             obj.Refine = True
     
     def attach(self, obj):
-        self.updateProps(obj)
+        super().attach(obj)
 
-        elementMap = ElementMap.fromDictionary(json.loads(obj.TElementMap))
-        obj.TShape = TShape(obj.Shape, elementMap)
-        obj.TShape.buildCache()
+        self.updateProps(obj)
 
     def onDocumentRestored(self, obj):
         self.attach(obj)
 
-    def execute(self, obj):
+    def computeShape(self, obj):
         self.updateProps(obj)
 
         if obj.Support != None:
-            features, index = FeatureUtils.getFeaturesAndIndex(obj)
+            features, index = ObjectUtils.getFeaturesAndIndex(ObjectUtils.getParentBody(obj), obj)
 
             sketchShape = GeometryManager.getFaceOfSketch(obj.Support)
             normal = obj.Support.Placement.Rotation.multVec(App.Vector(0, 0, 1))
@@ -73,7 +61,7 @@ class TExtrusion:
             if index > 0 and obj.BooleanOperationType != "None":
                 tag = -tag
 
-            mappedExtrusion = GeometryManager.makeMappedExtrusion(sketchShape, extrusionDirection, tag)[0]
+            mappedExtrusion = GeometryManager.makeMappedExtrusion(sketchShape, extrusionDirection, tag)
 
             obj.LastShapeIteration = obj.TShape.copy()           
 
@@ -99,25 +87,18 @@ class TExtrusion:
 
                 obj.TShape = mappedResult
                 obj.Shape = mappedResult.getShape()
-                obj.TElementMap = json.dumps(mappedResult.elementMap.toDictionary())
             else:
                 obj.TShape = mappedExtrusion
                 obj.Shape = mappedExtrusion.getShape()
-                obj.TElementMap = json.dumps(mappedExtrusion.elementMap.toDictionary())
             
+            self.aliasMap = ObjectUtils.updateAliasMap(self.aliasMap, obj.TShape)
+            obj.AliasMap = ObjectUtils.convertAliasMapToString(self.aliasMap)
+
+            ObjectUtils.updateShapeMap(self.aliasMap, obj)
+
             GeometryManager.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)
 
-            
-    def __setstate__(self, state):
-        return None
-    
-    def dumps(self):
-        return None
-    
-    def loads(self, state):
-        return None
-
-class TExtrusionViewObject:
+class ExtrusionViewObject:
     def __init__(self, obj):
         obj.ViewObject.Proxy = self
         self.updateProps(obj.ViewObject)
@@ -162,13 +143,16 @@ def makeExtrusion():
 
         if selObj.TypeId == "Sketcher::SketchObject":
             error = None
-            parent = selObj.getParent()
+            parent = ObjectUtils.getParentBody(selObj)
+
+            if parent == None:
+                parent = ObjectUtils.getActiveBody()
 
             if parent != None:
                 obj = App.ActiveDocument.addObject("Part::FeaturePython", "Extrusion")
 
-                TExtrusion(obj)
-                TExtrusionViewObject(obj)
+                Extrusion(obj)
+                ExtrusionViewObject(obj)
 
                 obj.Support = selObj
                 group = parent.Group
@@ -176,9 +160,9 @@ def makeExtrusion():
                 group.append(obj)
                 parent.Group = group
 
-                FeatureUtils.showFeature(obj)
+                parent.Proxy.showFeature(parent, obj)
             else:
-                error = "Please select a sketch that is in a part to extrude!"
+                error = "Please select a sketch that is in a DesignBody to extrude!"
     
     if error != None:
         App.Console.PrintError(error)
