@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(__file__))
 from Data.ElementMap import ElementMap
 from Data.IndexedName import IndexedName
 from Data.MappedName import MappedName
+import PerformanceTimer as PerformanceTimer
 import MappingUtils as MappingUtils
 import FreeCAD as App
 import Part
@@ -29,6 +30,7 @@ class TShape:
 
         self.elementMap = elementMap
         self.shapeMap = None
+        self.indexedNameHashedShapeMap = {}
         self.ancestorsMap = None
         self.tag = self.freecadShape.Tag
 
@@ -48,6 +50,7 @@ class TShape:
         self.cachedOCCTShape = None
         self.shapeMap = None
         self.ancestorsMap = None
+        self.indexedNameHashedShapeMap = {}
     
     def resetPlacement(self):
         newShape = self.freecadShape.copy()
@@ -58,6 +61,7 @@ class TShape:
         self.clearCache()
 
     def buildAncestorsMap(self, clearCache = False):
+        PerformanceTimer.GlobalTimer.addKey("BuildAncestorsMap")
         if clearCache: self.clearCache()
 
         if self.shapeMap == None:
@@ -90,6 +94,8 @@ class TShape:
                             
                             if indexedName.toString() not in self.ancestorsMap[indexedNameStr]:
                                 self.ancestorsMap[indexedNameStr].append(indexedName.toString())
+
+        PerformanceTimer.GlobalTimer.pauseKey("BuildAncestorsMap")
 
     def getAncestorsOfType(self, sourceShape: TopoDS_Shape, ancestorType: str):
         sourceIndexedNameStr = self.getIndexedNameOfShape(sourceShape).toString()
@@ -138,13 +144,24 @@ class TShape:
         return returnMap
     
     def getIndexedNameOfShape(self, childOCCTShape):
+        PerformanceTimer.GlobalTimer.addKey("GetIndexedNameOfShape")
         if self.shapeMap == None: self.buildShapeMap(False)
+
+        hashedShape = hash(childOCCTShape)
+
+        if hashedShape in self.indexedNameHashedShapeMap:
+            PerformanceTimer.GlobalTimer.pauseKey("GetIndexedNameOfShape")
+            return self.indexedNameHashedShapeMap[hashedShape]
 
         for indexedNameStr, shape in self.shapeMap.items():
             if shape.IsSame(childOCCTShape):
                 returnName = IndexedName.fromString(indexedNameStr)
+                self.indexedNameHashedShapeMap[hash(childOCCTShape)] = returnName
 
+                PerformanceTimer.GlobalTimer.pauseKey("GetIndexedNameOfShape")
                 return returnName
+        
+        PerformanceTimer.GlobalTimer.pauseKey("GetIndexedNameOfShape")
         
         return IndexedName()
     
@@ -152,10 +169,19 @@ class TShape:
         return ({} if self.shapeMap == None else self.shapeMap)
     
     def buildCache(self):
-        self.buildShapeMap(True)
-        self.buildAncestorsMap(False)
+        PerformanceTimer.GlobalTimer.addKey("BuildCache")
+
+        if self.shapeMap == None:
+            self.buildShapeMap(True)
+        
+        if self.ancestorsMap == None:
+            self.buildAncestorsMap(False)
+
+        PerformanceTimer.GlobalTimer.pauseKey("BuildCache")
     
     def buildShapeMap(self, clearCache = True):
+        PerformanceTimer.GlobalTimer.addKey("BuildShapeMap")
+
         if clearCache: self.clearCache()
 
         self.shapeMap = {}
@@ -167,6 +193,8 @@ class TShape:
 
             for i in range(1, internalShapeMap.Size() + 1):
                 self.shapeMap[f"{MappingUtils.getElementTypeName(elementType)}{i}"] = internalShapeMap.FindKey(i)
+        
+        PerformanceTimer.GlobalTimer.pauseKey("BuildShapeMap")
 
     def getIndexedName(self, searchName: MappedName):
         return self.elementMap.getIndexedName(searchName)

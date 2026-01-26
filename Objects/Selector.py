@@ -4,6 +4,7 @@ import os
 sys.path.append(os.path.dirname(__file__))
 
 from Objects.StableDesignObject import SDObject
+import Objects.ObjectUtils as ObjectUtils
 import Geometry.GeometryManager as GeometryManager
 import Geometry.MappingUtils as MappingUtils
 from Geometry.TShape import TShape
@@ -48,7 +49,7 @@ class Selector(SDObject):
         obj.Placement = App.Placement()
         linkedObject = obj.Document.getObject(obj.LinkedObjectName)
 
-        if hasattr(linkedObject, "TNamingType") and hasattr(linkedObject, "TShape"):
+        if ObjectUtils.isSDObject(linkedObject):
             mappedName = MappedName.fromDictionary(json.loads(obj.LinkedMappedName))
             foundNames = MappingUtils.searchForSimilarNames(mappedName, linkedObject.TShape, linkedObject.LastShapeIteration)
             spheres = []

@@ -15,11 +15,12 @@ from Commands.DisplayElementHistory import DisplayElementHistory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(locater.__file__)))) # allow python to see ".."
 __dirname__ = os.path.dirname(locater.__file__)
 
-class ToponamingBench(Gui.Workbench):
+class StableDesignBench(Gui.Workbench):
     global __dirname__
 
     MenuText = App.Qt.translate("Workbench", "Stable Design")
     ToolTip = App.Qt.translate("Workbench", "Stable Design")
+    Icon = os.path.join(__dirname__, "Icons", "StableDesignLogo.svg")
 
     def __init__(self):
         self.documentObserver = None
@@ -60,4 +61,4 @@ class ToponamingBench(Gui.Workbench):
     def Deactivated(self):
         pass
 
-Gui.addWorkbench(ToponamingBench())
+Gui.addWorkbench(StableDesignBench())

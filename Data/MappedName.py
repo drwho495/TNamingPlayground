@@ -2,16 +2,20 @@ import json
 import copy
 import time
 from Data.MappedSection import MappedSection
+import PerformanceTimer as PerformanceTimer
 
 class MappedName:
     def __init__(self, mappedSections = []):
         self.mappedSections = mappedSections
     
     def toDictionary(self):
+        PerformanceTimer.GlobalTimer.addKey("MappedNameToDictionary")
         returnDict = {"Sections": []}
 
         for mappedSection in self.mappedSections:
             returnDict["Sections"].append(mappedSection.toDictionary())
+        
+        PerformanceTimer.GlobalTimer.pauseKey("MappedNameToDictionary")
         
         return returnDict
 
@@ -19,13 +23,16 @@ class MappedName:
         return copy.deepcopy(self)
     
     @staticmethod
-    def fromDictionary(dictionary, baseLevel = True):
+    def fromDictionary(dictionary):
+        PerformanceTimer.GlobalTimer.addKey("MappedNameFromDictionary")
         mappedSections = []
 
         for section in dictionary["Sections"]:
             mappedSections.append(MappedSection.fromDictionary(section))
         
         newName = MappedName(mappedSections)
+
+        PerformanceTimer.GlobalTimer.pauseKey("MappedNameFromDictionary")
 
         return newName
     

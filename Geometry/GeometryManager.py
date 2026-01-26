@@ -8,6 +8,7 @@ from Data.IndexedName import IndexedName
 from Data.MappedName import MappedName
 from Data.MappedSection import MappedSection
 from Data.DataEnums import *
+import PerformanceTimer as PerformanceTimer
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
@@ -69,6 +70,8 @@ class ShapeHistoryList:
                 self.reverseHistoryList[name].append(sourceIndexedName)
 
 def makeMappedRefineOperation(shape: TShape, baseShapeTag: int, tag: int = 0):
+    PerformanceTimer.GlobalTimer.addKey("Refine")
+
     maker = ShapeUpgrade_UnifySameDomain(shape.getOCCTShape(), True, True, True)
     maker.Build()
 
@@ -141,6 +144,8 @@ def makeMappedRefineOperation(shape: TShape, baseShapeTag: int, tag: int = 0):
  
         newMappedName.mappedSections.append(newSection)
         returnShape.elementMap.setElement(newIndexedName, newMappedName.copy())
+
+    PerformanceTimer.GlobalTimer.pauseKey("Refine")
 
     return returnShape
 
@@ -288,6 +293,8 @@ def mapPrismLikeShape(supportTShape: TShape, prismLikeTShape: TShape, opCode: Op
             App.Console.PrintError(f"Cannot properly map this {opCode.name}, please report!")
 
 def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElements: List[IndexedName], radius: float = 1, tag: int = 0):
+    PerformanceTimer.GlobalTimer.addKey("Dressup")
+
     baseShape.buildCache()
     maker = None
 
@@ -407,6 +414,8 @@ def makeMappedDressup(baseShape: TShape, dressupType: DressupType, dressupElemen
 
             returnShape.elementMap.setElement(newShapeIndexedName, newMappedName)
 
+    PerformanceTimer.GlobalTimer.pauseKey("Dressup")
+
     return returnShape
 
 def makeMappedCompound(compoundShapes: List[TShape], tag: int = 0):
@@ -431,6 +440,8 @@ def makeMappedCompound(compoundShapes: List[TShape], tag: int = 0):
     return returnShape
 
 def makeMappedThickness(baseShape: TShape, faces: List[IndexedName], offset: int, tag: int = 0):
+    PerformanceTimer.GlobalTimer.addKey("Thickness")
+
     baseShape.buildCache()
 
     facesShapes = TopTools_ListOfShape()
@@ -546,10 +557,13 @@ def makeMappedThickness(baseShape: TShape, faces: List[IndexedName], offset: int
                                                                               elementType = newShapeIndexedName.elementType).copy()]
                 )
             )
+
+    PerformanceTimer.GlobalTimer.pauseKey("Thickness")
     
     return returnShape
 
 def makeMappedExtrusion(supportTShape: TShape, direction: App.Vector, tag: int = 0):
+    PerformanceTimer.GlobalTimer.addKey("Extrusion")
     vec = gp_Vec(direction.x, direction.y, direction.z)
     maker = BRepPrimAPI_MakePrism(supportTShape.getOCCTShape(), vec)
     maker.Build()
@@ -562,6 +576,7 @@ def makeMappedExtrusion(supportTShape: TShape, direction: App.Vector, tag: int =
     extrusionTShape.buildCache()
 
     mapPrismLikeShape(supportTShape, extrusionTShape, OpCode.EXTRUSION)
+    PerformanceTimer.GlobalTimer.pauseKey("Extrusion")
 
     return extrusionTShape
 

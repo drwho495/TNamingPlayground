@@ -93,8 +93,9 @@ class Extrusion(SDObject):
             
             self.aliasMap = ObjectUtils.updateAliasMap(self.aliasMap, obj.TShape)
             obj.AliasMap = ObjectUtils.convertAliasMapToString(self.aliasMap)
-
             ObjectUtils.updateShapeMap(self.aliasMap, obj)
+
+            obj.Support.purgeTouched()
 
             GeometryManager.colorElementsFromSupport(obj, obj.Shape, obj.TShape.elementMap)
 

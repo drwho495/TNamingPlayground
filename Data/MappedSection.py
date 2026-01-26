@@ -100,16 +100,16 @@ class MappedSection:
                                          index = dictionary["Index"]).copy()
         
         for linkedName in dictionary["LinkedNames"]:
-            newMappedSection.linkedNames.append(MappedName.fromDictionary(linkedName, False))
+            newMappedSection.linkedNames.append(MappedName.fromDictionary(linkedName))
 
         if "DeletedNames" in dictionary:
             for deletedName in dictionary["DeletedNames"]:
-                newMappedSection.deletedNames.append(MappedName.fromDictionary(deletedName, False))
+                newMappedSection.deletedNames.append(MappedName.fromDictionary(deletedName))
         elif "AlternativeNames" in dictionary:
             for alternativeName in dictionary["AlternativeNames"]:
-                newMappedSection.deletedNames.append(MappedName.fromDictionary(alternativeName, False))
+                newMappedSection.deletedNames.append(MappedName.fromDictionary(alternativeName))
         
         for ancestorName in dictionary["Ancestors"]:
-            newMappedSection.ancestors.append(MappedName.fromDictionary(ancestorName, False))
+            newMappedSection.ancestors.append(MappedName.fromDictionary(ancestorName))
 
         return newMappedSection

@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 
 sys.path.append(os.path.dirname(__file__))
 
@@ -8,6 +9,7 @@ import Objects.ObjectUtils as ObjectUtils
 import Geometry.GeometryManager as GeometryManager
 from Geometry.TShape import TShape
 from Data.DataEnums import *
+import PerformanceTimer as PerformanceTimer
 import FreeCADGui as Gui
 import FreeCAD as App
 import json
@@ -25,11 +27,28 @@ class DesignBody(SDObject):
                             implementShapePair = False,
                             implementBoolOpType = False,
                             implementRefine = False,
+                            isFeatureOperation = False,
                             typeName = "DesignBody")
         
         if not obj.hasExtension("App::OriginGroupExtensionPython"):
             obj.addExtension("App::OriginGroupExtensionPython")
             obj.Origin = App.ActiveDocument.addObject("App::Origin", "Origin")
+        
+        if not hasattr(obj, "TipObject"):
+            obj.addProperty("App::PropertyEnumeration", "TipObject")
+            self.updateTipEnum(obj)
+    
+    def updateTipEnum(self, obj):
+        tipObjList = []
+
+        if hasattr(obj, "TipObject"):
+            for subObj in obj.Group:
+                if ObjectUtils.isSDFeatureOperation(subObj):
+                    tipObjList.append(subObj.Name)
+            
+            obj.TipObject = tipObjList
+        
+        return tipObjList
         
     def attach(self, obj):
         super().attach(obj)
@@ -43,14 +62,43 @@ class DesignBody(SDObject):
 
     def onDocumentRestored(self, obj):
         self.attach(obj)
+    
+    def onChanged(self, obj, prop):
+        if prop == "Group":
+            oldTipValue = obj.TipObject
+            enumList = self.updateTipEnum(obj)
+
+            if oldTipValue in enumList:
+                obj.TipObject = oldTipValue
+            elif len(enumList) != 0:
+                obj.TipObject = enumList[-1]
+
+    def getTipObject(self, obj):
+        if obj.TipObject != "":
+            tipObj = obj.Document.getObject(obj.TipObject)
+            return (tipObj, obj.Group.index(tipObj))
+        return (None, 0)
 
     def execute(self, obj):
         self.updateProps(obj)
 
-        for subObj in obj.Group:
-            if ObjectUtils.isSDFeatureOperation(subObj) and hasattr(subObj, "Proxy") and hasattr(subObj.Proxy, "computeShape"):
-                subObj.Proxy.computeShape(subObj)
-                subObj.purgeTouched()
+        PerformanceTimer.GlobalTimer.removeKeys()
+        startTime = time.time()
+        tipObject, tipIndex = self.getTipObject(obj)
+
+        if tipObject != None:
+            for i, subObj in enumerate(obj.Group):
+                if i <= tipIndex and ObjectUtils.isSDFeatureOperation(subObj) and hasattr(subObj, "Proxy") and hasattr(subObj.Proxy, "computeShape"):
+                    subObj.Proxy.computeShape(subObj)
+                    subObj.purgeTouched()
+        
+        PerformanceTimer.GlobalTimer.logKeys()
+        
+        App.Console.PrintLog(f"\nTotal recorded time from PerformanceTimer: {PerformanceTimer.GlobalTimer.getTotalTime()}.\n")
+
+        PerformanceTimer.GlobalTimer.removeKeys()
+        
+        App.Console.PrintLog(f"Recompute time for {obj.Label} was {round((time.time() - startTime) * 1000, 1)}.\n")
 
 class DesignBodyViewObject:
     def __init__(self, obj):
