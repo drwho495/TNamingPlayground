@@ -33,35 +33,35 @@ class SelectRootFeature:
                     mappedName = elementMap.getMappedName(indexedName)
                     document = element.Object.Document
             
-                if len(mappedName.mappedSections) != 0:
-                    for obj in document.Objects:
-                        if obj.ID == abs(mappedName.mappedSections[0].iterationTag):
-                            Gui.Selection.clearSelection()
+                # if len(mappedName.mappedSections) != 0:
+                #     for obj in document.Objects:
+                #         if obj.ID == abs(mappedName.mappedSections[0].iterationTag):
+                #             Gui.Selection.clearSelection()
 
-                            features, index = ObjectUtils.getFeaturesAndIndex(ObjectUtils.getParentBody(obj), obj)
+                #             features, index = ObjectUtils.getFeaturesAndIndex(ObjectUtils.getParentBody(obj), obj)
 
-                            for i, feature in enumerate(features):
-                                if i == index:
-                                    feature.Visibility = True
-                                    rebuiltMappedName = MappedName().copy()
-                                    foundTag = False
+                #             for i, feature in enumerate(features):
+                #                 if i == index:
+                #                     feature.Visibility = True
+                #                     rebuiltMappedName = MappedName().copy()
+                #                     foundTag = False
 
-                                    for section in mappedName.mappedSections:
-                                        if abs(section.iterationTag) == obj.ID:
-                                            foundTag = True
-                                        else:
-                                            if foundTag == True:
-                                                break
-                                        rebuiltMappedName.mappedSections.append(section.copy())
+                #                     for section in mappedName.mappedSections:
+                #                         if abs(section.iterationTag) == obj.ID:
+                #                             foundTag = True
+                #                         else:
+                #                             if foundTag == True:
+                #                                 break
+                #                         rebuiltMappedName.mappedSections.append(section.copy())
 
-                                    indexedName = feature.TShape.getIndexedName(rebuiltMappedName)
+                #                     indexedName = feature.TShape.getIndexedName(rebuiltMappedName)
 
-                                    if indexedName.indexNumber != 0:
-                                        Gui.Selection.addSelection(document.Name, feature.Name, indexedName.toString())
-                                else:
-                                    feature.Visibility = False
+                #                     if indexedName.indexNumber != 0:
+                #                         Gui.Selection.addSelection(document.Name, feature.Name, indexedName.toString())
+                #                 else:
+                #                     feature.Visibility = False
 
-                            break
+                #             break
                     
     def IsActive(self):
         return App.ActiveDocument != None

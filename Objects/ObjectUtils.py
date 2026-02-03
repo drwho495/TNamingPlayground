@@ -52,7 +52,7 @@ def convertAliasMapFromString(mapString: str):
     formattedMap = {}
 
     for alias, namePair in map.items():
-        formattedMap[alias] = (MappedName.fromDictionary(namePair[0]), namePair[1])
+        formattedMap[alias] = (MappedName(namePair[0]), namePair[1])
 
     return formattedMap
 
@@ -60,7 +60,7 @@ def convertAliasMapToString(map: dict):
     formattedMap = {}
 
     for alias, namePair in map.items():
-        formattedMap[alias] = (namePair[0].toDictionary(), namePair[1])
+        formattedMap[alias] = (namePair[0].toString(), namePair[1])
 
     return json.dumps(formattedMap)
 

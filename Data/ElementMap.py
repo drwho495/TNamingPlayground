@@ -5,27 +5,13 @@ import copy
 class ElementMap:
     def __init__(self):
         self.internalMap = {}
-        self.tagsInHistory = []
 
-    def setElement(self, indexedName, mappedName):
+    def setElement(self, indexedName, mappedName: MappedName):
         self.internalMap[indexedName.toString()] = mappedName
-
-        for section in mappedName.mappedSections:
-            if section.iterationTag not in self.tagsInHistory:
-                self.tagsInHistory.append(section.iterationTag)
-    
-    def hasTag(self, tag):
-        return tag in self.tagsInHistory
 
     def hasIndexedName(self, indexedName):
         return indexedName.toString() in self.internalMap
     
-    # this should ONLY be used as a utility for mapping shapes, 
-    # do not use this for searching for names!
-    def getMappedNameFromReferenceIDs(self, IDs):
-        for _, mappedName in self.internalMap.items():
-            if mappedName.masterIDs() == IDs or len(set(mappedName.masterIDs()) & set(IDs)) == len(IDs):
-                return mappedName
     
     def getMappedName(self, indexedName):
         if indexedName.toString() not in self.internalMap:
@@ -43,7 +29,7 @@ class ElementMap:
         returnDict = {}
 
         for indexedName, mappedName in self.internalMap.items():
-            returnDict[indexedName] = mappedName.toDictionary()
+            returnDict[indexedName] = mappedName.toString()
         
         return returnDict
     
@@ -56,7 +42,7 @@ class ElementMap:
         newElementMap = ElementMap()
 
         for _, namePair in aliasMap.items():
-            newElementMap.internalMap[namePair[1]] = MappedName.fromDictionary(namePair[0])
+            newElementMap.internalMap[namePair[1]] = MappedName(namePair[0])
 
         return newElementMap
 
@@ -64,8 +50,8 @@ class ElementMap:
     def fromDictionary(dictionary):
         newElementMap = ElementMap()
 
-        for indexNameStr, mappedNameDict in dictionary.items():
-            newElementMap.internalMap[indexNameStr] = MappedName.fromDictionary(mappedNameDict)
+        for indexNameStr, mappedNameStr in dictionary.items():
+            newElementMap.internalMap[indexNameStr] = MappedName(mappedNameStr)
         
         return newElementMap
 

@@ -30,23 +30,7 @@ class HistoryViewerWidget(QTreeWidget):
 
     def loadMappedName(self, mappedName: MappedName):
         self.clear()
-
-        for i, section in enumerate(mappedName.mappedSections):
-            sectionDict = section.toDictionary()
-
-            self.addTopLevelItem(self._createItem("Operation Code", section.opCode.name))
-            self.addTopLevelItem(self._createItem("Map Modifier", section.mapModifier.name))
-            self.addTopLevelItem(self._createItem("Iteration Tag", section.iterationTag))
-            self.addTopLevelItem(self._createItem("Linked Names", sectionDict["LinkedNames"]))
-            self.addTopLevelItem(self._createItem("Reference ID(s)", ",".join(section.referenceIDs)))
-            self.addTopLevelItem(self._createItem("Element Type", section.elementType))
-            self.addTopLevelItem(self._createItem("Element is Split", section.forkedElement))
-            self.addTopLevelItem(self._createItem("Index", section.index))
-            self.addTopLevelItem(self._createItem("Number Of Split Elements", section.totalNumberOfSectionElements))
-            self.addTopLevelItem(self._createItem("Deleted Name(s)", sectionDict["DeletedNames"]))
-            self.addTopLevelItem(self._createItem("Ancestor(s)", sectionDict["Ancestors"]))
-            if (i + 1) != len(mappedName.mappedSections): self.addTopLevelItem(self._createItem())
-
+        self.addTopLevelItem(self._createItem("Name", mappedName.toString()))
         self.expandAll()
 
     def _createItem(self, name = "", value = ""):
