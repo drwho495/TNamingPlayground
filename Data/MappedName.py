@@ -7,21 +7,21 @@ import time
 # IterationTag and OpCode do not determine an element's qualification, but everything after it does.
 # Those initial two entries tell the design intent algorithm what to look for in a loop name. They're used as a
 # `key` of sorts.
-# ReferenceIDs;ReferenceNames;InitialTag;Index;ElementType;DuplicateCount;MapperInfo
-#      ^     other mapped names   ^        0      E/V/F           0        anything
-# g1:1233:0,g2:1233:1,g3:1233:0  1234
+# ReferenceIDs;ReferenceNames;IterationTag;OperationCode;Index;ElementType;DuplicateCount;MapperInfo
+#      ^     other mapped names    ^           SKT         0      E/V/F           0        anything
+# g1:1233:0,g2:1233:1,g3:1233:0   1234
 class MappedName:
     def __init__(self, baseString = ""):
         self.baseString = baseString
     
-    @staticmethod
-    def makeName(referenceIDs = ["_"],
-                 referenceNames = ["_"],
-                 initialTag = 0,
-                 index = 0,
-                 elementType = "E",
-                 duplicateCount = 0,
-                 mapperInfo = "_"
+    def makeSection(referenceIDs = ["_"],
+                    referenceNames = ["_"],
+                    iterationTag = 0,
+                    operationCode = "MKR",
+                    index = 0,
+                    elementType = "E",
+                    duplicateCount = 0,
+                    mapperInfo = "_"
     ):
         formattedRefNames = ""
 
@@ -31,7 +31,19 @@ class MappedName:
 
             formattedRefNames += MappedName.escapeDeliminators(name, [";", ":", ","])
 
-        return MappedName(f"{','.join(referenceIDs)};{formattedRefNames};{str(initialTag)};{str(index)};{elementType};{str(duplicateCount)};{mapperInfo}")
+        return f"{','.join(referenceIDs)};{formattedRefNames};{str(iterationTag)};{operationCode};{str(index)};{elementType};{str(duplicateCount)};{mapperInfo}"
+
+    @staticmethod
+    def makeName(sections = []):
+        return MappedName("|".join(sections))
+    
+    def addSection(self, section):
+        prefix = ""
+
+        if not self.baseString.endswith("|"):
+            prefix = "|"
+
+        self.baseString += f"{prefix}{section}"
     
     def copy(self):
         return copy.deepcopy(self)
@@ -47,6 +59,9 @@ class MappedName:
         return False
     
     def toString(self):
+        self.baseString = self.baseString.removeprefix('"')
+        self.baseString = self.baseString.removesuffix('"')
+
         return self.baseString
 
     @staticmethod
@@ -59,7 +74,7 @@ class MappedName:
         for i, char in enumerate(str):
             lastChar = (i == (len(str) - 1))
 
-            if char == "\\":
+            if char == "^":
                 escapeNumber += 1
 
                 if escapeNumber == 1:
@@ -80,12 +95,28 @@ class MappedName:
         return sections
 
     @staticmethod
+    def stringGetOpCode(string: str):
+        return MappedName.stringGetSectionData(string, 3, True)
+
+    @staticmethod
+    def stringGetElementType(string: str):
+        return MappedName.stringGetSectionData(string, 5)
+
+    @staticmethod
+    def stringGetDuplicateCount(string: str):
+        return MappedName.stringGetSectionData(string, 6, True)
+
+    @staticmethod
+    def stringGetMapperInfo(string: str):
+        return MappedName.stringGetSectionData(string, 7)
+
+    @staticmethod
     def stringGetTag(string: str):
         return MappedName.stringGetSectionData(string, 2, True)
 
     @staticmethod
     def stringGetIndex(string: str):
-        return MappedName.stringGetSectionData(string, 3, True)
+        return MappedName.stringGetSectionData(string, 4, True)
 
     @staticmethod
     def stringGetSectionData(string: str, sectionIndex: int, convertToInt: bool = False):
@@ -110,7 +141,7 @@ class MappedName:
 
         for char in string:
             if char in delims:
-                newStr += "\\"
+                newStr += "^"
             
             newStr += char
         
@@ -122,7 +153,7 @@ class MappedName:
         escapeLevel = 0
 
         for char in string:
-            if char == "\\":
+            if char == "^":
                 escapeLevel += 1
 
                 if escapeLevel == 1:
@@ -170,44 +201,40 @@ class MappedName:
         
         return names
 
-    @staticmethod
-    def makeSection():
-        return ""
+    def toSections(self):
+        return MappedName.stringToSections(self.toString(), "|")
     
-    def setInitialTag(self, newTag: int):
-        self.baseString = MappedName.stringSetSectionData(self.baseString, 2, newTag)
-    
-    def setIndex(self, newIndex: int):
-        self.baseString = MappedName.stringSetSectionData(self.baseString, 3, newIndex)
+    def masterIDs(self, packageInfo = False):
+        sections = self.toSections()
 
-    def referenceIDs(self, packageInfo = False):
-        nameString = self.toString()
-        IDs = MappedName.stringGetIDs(nameString)
+        if len(sections) > 0:
+            nameString = sections[0]
+            IDs = MappedName.stringGetIDs(nameString)
 
-        if packageInfo:
-            packagedIDs = []
-            tag = MappedName.stringGetTag(nameString)
-            index = MappedName.stringGetIndex(nameString)
+            if packageInfo:
+                packagedIDs = []
+                tag = MappedName.stringGetTag(nameString)
+                index = MappedName.stringGetIndex(nameString)
 
-            for idStr in IDs:
-                if ":" in idStr:
-                    idStr = idStr.split(":")[0]
-                
-                packagedIDs.append(f"{idStr}:{tag}:{index}")
-            return packagedIDs
-        else:
-            return IDs
+                for idStr in IDs:
+                    if ":" in idStr:
+                        idStr = idStr.split(":")[0]
+                    
+                    packagedIDs.append(f"{idStr}:{tag}:{index}")
+                return packagedIDs
+            else:
+                return IDs
     
     def referenceNames(self):
         return MappedName.stringGetNames(self.toString())
     
     def packageReferenceIDs(self):
-        IDs = self.referenceIDs(True)
+        IDs = self.masterIDs(True)
 
         self.baseString = MappedName.stringSetSectionData(self.toString(), 0, ','.join(IDs))
     
     def getMapperInfo(self):
-        return MappedName.stringGetSectionData(self.toString(), 6)
+        return MappedName.stringGetSectionData(self.toString(), 7)
 
     # this is a base equality check, we will do more complicated searching checks later
     def equal(self, otherMappedName):

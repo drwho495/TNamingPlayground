@@ -7,17 +7,27 @@ class ElementMap:
         self.internalMap = {}
 
     def setElement(self, indexedName, mappedName: MappedName):
-        self.internalMap[indexedName.toString()] = mappedName
-
+        self.internalMap[mappedName] = IndexedName.fromString(indexedName.toString())
+    
     def hasIndexedName(self, indexedName):
-        return indexedName.toString() in self.internalMap
+        return IndexedName.fromString(indexedName.toString()) in self.internalMap.values()
     
-    
-    def getMappedName(self, indexedName):
-        if indexedName.toString() not in self.internalMap:
-            return MappedName()
+    def getMappedNames(self, indexedName):
+        names = []
 
-        return self.internalMap[indexedName.toString()]
+        for mappedName, loopIndexName in self.internalMap.items():
+            if loopIndexName.toString() == indexedName.toString():
+                names.append(mappedName)
+
+        return names
+
+    def getMappedName(self, indexedName):
+        names = self.getMappedNames(indexedName)
+
+        if len(names) == 0:
+            return None
+
+        return names[0]
     
     def getMap(self):
         return self.internalMap
@@ -28,8 +38,8 @@ class ElementMap:
     def toDictionary(self):
         returnDict = {}
 
-        for indexedName, mappedName in self.internalMap.items():
-            returnDict[indexedName] = mappedName.toString()
+        for mappedName, indexedName in self.internalMap.items():
+            returnDict[mappedName.toString()] = indexedName.toString()
         
         return returnDict
     
@@ -42,7 +52,7 @@ class ElementMap:
         newElementMap = ElementMap()
 
         for _, namePair in aliasMap.items():
-            newElementMap.internalMap[namePair[1]] = MappedName(namePair[0])
+            newElementMap.internalMap[MappedName(namePair[0])] = IndexedName.fromString(namePair[1])
 
         return newElementMap
 
@@ -50,14 +60,13 @@ class ElementMap:
     def fromDictionary(dictionary):
         newElementMap = ElementMap()
 
-        for indexNameStr, mappedNameStr in dictionary.items():
-            newElementMap.internalMap[indexNameStr] = MappedName(mappedNameStr)
+        for mappedNameStr, indexNameStr in dictionary.items():
+            newElementMap.internalMap[MappedName(mappedNameStr)] = IndexedName.fromString(indexNameStr)
         
         return newElementMap
 
     def getIndexedName(self, mappedName: MappedName):
-        for loopIndexedName, loopMappedName in self.internalMap.items():
-            if loopMappedName.equal(mappedName):
-                return IndexedName.fromString(loopIndexedName)
+        if mappedName not in self.internalMap:
+            return IndexedName()
         
-        return IndexedName()
+        return self.internalMap[mappedName]

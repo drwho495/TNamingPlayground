@@ -65,12 +65,12 @@ class Dressup(SDObject):
                 mappedNames = []
 
                 for element in obj.Elements:
-                    mappedName = MappedName.fromDictionary(json.loads(element))
+                    mappedName = MappedName(element)
                     foundNames = MappingUtils.searchForSimilarNames(mappedName, lastFeature.TShape, lastFeature.LastShapeIteration)
 
                     for foundName in foundNames:
                         if foundName[1] not in indexedElements:
-                            mappedNames.append(json.dumps(foundName[0].toDictionary()))
+                            mappedNames.append(foundName[0].toString())
                             indexedElements.append(foundName[1])
             
                 mappedResult = GeometryManager.makeMappedDressup(lastFeature.TShape,
@@ -158,8 +158,10 @@ def makeDressup(dressupType = DressupType.FILLET):
                     if ObjectUtils.isSDObject(element.Object):
                         elementMap = element.Object.TShape.elementMap
                         indexedName = IndexedName.fromString(element.SubElementNames[0])
-                                
-                        elements.append(json.dumps(elementMap.getMappedName(indexedName).toDictionary()))
+                        mappedName = elementMap.getMappedName(indexedName)
+
+                        if mappedName != None:
+                            elements.append(mappedName.toString())
             
             obj.Elements = elements
             obj.DressupType = dressupTypeName

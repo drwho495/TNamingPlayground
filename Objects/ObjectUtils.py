@@ -67,18 +67,18 @@ def convertAliasMapToString(map: dict):
 def updateAliasMap(oldMap: dict, shape: TShape) -> dict:
     newMap = {}
 
-    for indexedName, mappedName in shape.elementMap.internalMap.items():
+    for mappedName, indexedName in shape.elementMap.internalMap.items():
         resolvedName = False
 
         for alias, namePair in oldMap.items():
             if namePair[0] == mappedName and MappingUtils.complexCompare(namePair[0], shape, TShape(), mappedName):
                 if alias not in newMap:
-                    newMap[alias] = (mappedName, indexedName)
+                    newMap[alias] = (mappedName, indexedName.toString())
 
                     resolvedName = True
                     continue
 
-        if not resolvedName: newMap[generateRandomName(oldMap)] = (mappedName, indexedName)
+        if not resolvedName: newMap[generateRandomName(oldMap)] = (mappedName, indexedName.toString())
     
     return newMap
 

@@ -61,12 +61,12 @@ class Thickness(SDObject):
                 mappedNames = []
 
                 for element in obj.Faces:
-                    mappedName = MappedName.fromDictionary(json.loads(element))
+                    mappedName = MappedName(element)
                     foundNames = MappingUtils.searchForSimilarNames(mappedName, lastFeature.TShape, lastFeature.LastShapeIteration)
 
                     for foundName in foundNames:
                         if foundName[1] not in indexedElements:
-                            mappedNames.append(json.dumps(foundName[0].toDictionary()))
+                            mappedNames.append(foundName[0].toString())
                             indexedElements.append(foundName[1])
             
                 mappedResult = GeometryManager.makeMappedThickness(lastFeature.TShape, indexedElements, obj.Offset.Value, obj.ID)
@@ -145,7 +145,7 @@ def makeThickness():
                         elementMap = element.Object.TShape.elementMap
                         indexedName = IndexedName.fromString(element.SubElementNames[0])
                                 
-                        elements.append(json.dumps(elementMap.getMappedName(indexedName).toDictionary()))
+                        elements.append(elementMap.getMappedName(indexedName).toString())
             
             obj.Faces = elements
             obj.recompute()

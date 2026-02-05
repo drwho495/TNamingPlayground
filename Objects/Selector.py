@@ -41,7 +41,7 @@ class Selector(SDObject):
 
     def updateLink(self, obj, newLinkObj, newLinkName: MappedName):
         obj.LinkedObjectName = newLinkObj.Name
-        obj.LinkedMappedName = json.dumps(newLinkName.toDictionary())
+        obj.LinkedMappedName = newLinkName.toString()
     
     def execute(self, obj):
         self.updateProps(obj)
@@ -50,7 +50,7 @@ class Selector(SDObject):
         linkedObject = obj.Document.getObject(obj.LinkedObjectName)
 
         if ObjectUtils.isSDObject(linkedObject):
-            mappedName = MappedName.fromDictionary(json.loads(obj.LinkedMappedName))
+            mappedName = MappedName(obj.LinkedMappedName)
             foundNames = MappingUtils.searchForSimilarNames(mappedName, linkedObject.TShape, linkedObject.LastShapeIteration)
             spheres = []
 
@@ -119,6 +119,7 @@ def makeSelector():
         if element.HasSubObjects:
             elementMap = element.Object.TShape.elementMap
             indexedName = IndexedName.fromString(element.SubElementNames[0])
-                    
-            obj.Proxy.updateLink(obj, element.Object, elementMap.getMappedName(indexedName))
-            break
+
+            if elementMap.hasIndexedName(indexedName):
+                obj.Proxy.updateLink(obj, element.Object, elementMap.getMappedName(indexedName))
+                break
